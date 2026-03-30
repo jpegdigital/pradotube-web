@@ -844,6 +844,39 @@ body {
   opacity: 0.4;
 }
 
+/* ─── Sync mode toggle ─── */
+.tt-sync-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.675rem;
+  font-family: var(--font-nunito), system-ui, sans-serif;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.4;
+  white-space: nowrap;
+  background: var(--secondary);
+}
+
+.tt-sync-mode-toggle:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 8%, var(--secondary));
+}
+
+.tt-sync-mode-archive {
+  background: color-mix(in srgb, var(--logo-purple) 18%, transparent);
+  color: var(--logo-purple);
+}
+
+.tt-sync-mode-archive:hover {
+  background: color-mix(in srgb, var(--logo-purple) 25%, transparent);
+  color: var(--logo-purple);
+}
+
 /* ─── Action buttons ─── */
 .tt-action-btn {
   display: inline-flex;
@@ -877,12 +910,13 @@ body {
 /* ─── Mobile: simplify channel items ─── */
 @media (max-width: 767px) {
   .tt-ch-meta .tt-meta-select,
-  .tt-ch-meta .tt-meta-input {
+  .tt-ch-meta .tt-meta-input,
+  .tt-ch-meta .tt-sync-mode-toggle {
     display: none;
   }
 
   /* Hide the dots before hidden controls */
-  .tt-ch-meta .tt-dot:nth-last-child(-n+4) {
+  .tt-ch-meta .tt-dot:nth-last-child(-n+6) {
     display: none;
   }
 

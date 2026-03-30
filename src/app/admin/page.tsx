@@ -37,6 +37,7 @@ import {
   PanelRightOpen,
   CloudUpload,
   Star,
+  Archive,
 } from "lucide-react";
 
 const supabase = createClient();
@@ -66,6 +67,7 @@ interface CuratedChannelRow {
   date_range_override: string | null;
   min_duration_override: number | null;
   max_videos_override: number | null;
+  sync_mode: string;
   channels: {
     youtube_id: string;
     title: string;
@@ -604,6 +606,26 @@ export default function AdminPage() {
     [queryClient]
   );
 
+  const updateSyncMode = useCallback(
+    async (curatedId: string, syncMode: string) => {
+      try {
+        const { error } = await supabase
+          .from("curated_channels")
+          .update({ sync_mode: syncMode })
+          .eq("id", curatedId);
+        if (error) {
+          toast.error("Failed to update sync mode");
+          return;
+        }
+        queryClient.invalidateQueries({ queryKey: ["creators"] });
+        toast.success(`Sync mode: ${syncMode}`);
+      } catch {
+        toast.error("Failed to update sync mode");
+      }
+    },
+    [queryClient]
+  );
+
   const updateCreatorPriority = useCallback(
     async (creatorId: string, priority: number) => {
       try {
@@ -920,6 +942,7 @@ export default function AdminPage() {
                                 onDateRangeChange={updateDateRange}
                                 onMinDurationChange={updateMinDuration}
                                 onMaxVideosChange={updateMaxVideos}
+                                onSyncModeChange={updateSyncMode}
                               />
                             ))
                           )}
@@ -954,6 +977,7 @@ export default function AdminPage() {
                           onDateRangeChange={updateDateRange}
                           onMinDurationChange={updateMinDuration}
                           onMaxVideosChange={updateMaxVideos}
+                          onSyncModeChange={updateSyncMode}
                         />
                       ))}
                     </div>
@@ -1333,6 +1357,7 @@ function ChannelTreeRow({
   onDateRangeChange,
   onMinDurationChange,
   onMaxVideosChange,
+  onSyncModeChange,
 }: {
   cc: CuratedChannelRow;
   videoCounts: Map<string, VideoCounts>;
@@ -1343,6 +1368,7 @@ function ChannelTreeRow({
   onDateRangeChange: (curatedId: string, value: string | null) => void;
   onMinDurationChange: (curatedId: string, value: number | null) => void;
   onMaxVideosChange: (curatedId: string, value: number | null) => void;
+  onSyncModeChange: (curatedId: string, value: string) => void;
 }) {
   const ch = rowToChannel(cc);
   const uploaded = videoCounts.get(cc.channel_id)?.uploaded ?? 0;
@@ -1407,6 +1433,15 @@ function ChannelTreeRow({
           <MinDurationInput curatedId={cc.id} value={cc.min_duration_override} onChange={onMinDurationChange} />
           <span className="tt-dot">&middot;</span>
           <MaxVideosInput curatedId={cc.id} value={cc.max_videos_override} onChange={onMaxVideosChange} />
+          <span className="tt-dot">&middot;</span>
+          <button
+            onClick={() => onSyncModeChange(cc.id, cc.sync_mode === "archive" ? "sync" : "archive")}
+            className={`tt-sync-mode-toggle ${cc.sync_mode === "archive" ? "tt-sync-mode-archive" : ""}`}
+            title={cc.sync_mode === "archive" ? "Archive mode — keeps all videos permanently" : "Sync mode — rolling window, removes old videos"}
+          >
+            <Archive className="h-3 w-3" />
+            <span>{cc.sync_mode === "archive" ? "Archive" : "Sync"}</span>
+          </button>
         </div>
       </div>
     </div>
