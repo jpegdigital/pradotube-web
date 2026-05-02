@@ -9,7 +9,7 @@ export default async function CreatorShowsPage({
 }) {
   const { slug } = await params;
   const { firstPage, creators } = await getShowsInitial(slug);
-  if (firstPage.videos.length === 0) notFound();
+  if (!creators.some((c) => c.slug === slug)) notFound();
 
   return (
     <ShowsGrid

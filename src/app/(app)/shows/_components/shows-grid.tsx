@@ -113,6 +113,14 @@ export function ShowsGrid({
           ))}
         </div>
 
+        {videos.length === 0 && activeSlug && (
+          <div className="flex justify-center pt-12 pb-4 text-center">
+            <p className="font-body text-muted-foreground">
+              No videos here yet — check back soon!
+            </p>
+          </div>
+        )}
+
         {hasNextPage ? (
           <div ref={sentinelRef} className="h-10" aria-hidden />
         ) : (

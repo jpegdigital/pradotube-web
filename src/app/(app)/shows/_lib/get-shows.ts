@@ -89,32 +89,26 @@ export async function getShowsPage(
 }
 
 export async function getShowsInitial(slug?: string): Promise<ShowsInitial> {
-  await verifySession();
+  const { userId } = await verifySession();
   const supabase = await createClient();
 
-  const [firstPage, chipsRes] = await Promise.all([
+  const [firstPage, subsRes] = await Promise.all([
     getShowsPage({ slug }),
     supabase
-      .from("user_feed_candidates")
-      .select("creator_id, creator_slug, creator_name, creator_avatar"),
+      .from("user_subscriptions")
+      .select("creator:creators!inner(slug, name, thumbnail_url)")
+      .eq("user_id", userId),
   ]);
 
-  if (chipsRes.error) throw chipsRes.error;
+  if (subsRes.error) throw subsRes.error;
 
-  const creatorMap = new Map<string, ShowCreator>();
-  for (const r of chipsRes.data ?? []) {
-    if (!r.creator_id || !r.creator_slug || !r.creator_name) continue;
-    if (!creatorMap.has(r.creator_id)) {
-      creatorMap.set(r.creator_id, {
-        slug: r.creator_slug,
-        name: r.creator_name,
-        avatar: r.creator_avatar ?? "",
-      });
-    }
-  }
-  const creators = [...creatorMap.values()].sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
+  const creators: ShowCreator[] = (subsRes.data ?? [])
+    .map((row) => ({
+      slug: row.creator.slug,
+      name: row.creator.name,
+      avatar: row.creator.thumbnail_url ?? "",
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return { firstPage, creators };
 }
