@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useMountEffect } from "@/hooks/use-mount-effect";
 import { createPortal } from "react-dom";
-import Image from "next/image";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Toaster, toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/browser";
 import { slugify } from "@/lib/slugify";
 import { StarRating } from "@/components/ui/star-rating";
 import {
@@ -38,9 +37,9 @@ import {
   CloudUpload,
   Star,
   Archive,
+  CloudCog,
+  ClipboardCheck,
 } from "lucide-react";
-
-const supabase = createClient();
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -58,43 +57,38 @@ interface Channel {
   priority: number;
 }
 
-interface CuratedChannelRow {
-  id: string;
-  channel_id: string;
-  display_order: number;
-  priority: number;
+interface ChannelRow {
+  youtube_id: string;
+  title: string;
+  description: string | null;
+  custom_url: string | null;
+  thumbnail_url: string | null;
+  banner_url: string | null;
+  subscriber_count: number;
+  video_count: number;
+  view_count: number;
   creator_id: string | null;
+  display_order: number | null;
+  priority: number;
   date_range_override: string | null;
   min_duration_override: number | null;
   max_videos_override: number | null;
   sync_mode: string;
-  channels: {
-    youtube_id: string;
-    title: string;
-    description: string | null;
-    custom_url: string | null;
-    thumbnail_url: string | null;
-    banner_url: string | null;
-    subscriber_count: number;
-    video_count: number;
-    view_count: number;
-  };
 }
 
 interface Creator {
   id: string;
   name: string;
   slug: string;
-  avatar_channel_id: string | null;
-  cover_channel_id: string | null;
+  thumbnail_url: string | null;
   display_order: number;
   priority: number;
-  curated_channels: CuratedChannelRow[];
+  channels: ChannelRow[];
 }
 
 interface CreatorsResponse {
   creators: Creator[];
-  ungrouped: CuratedChannelRow[];
+  ungrouped: ChannelRow[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -131,61 +125,36 @@ function formatCount(count: string | number): string {
 }
 
 function rowToChannel(
-  row: CuratedChannelRow
-): Channel & { curatedId: string; creatorId: string | null } {
-  const ch = row.channels;
+  row: ChannelRow
+): Channel & { creatorId: string | null } {
   return {
-    curatedId: row.id,
     creatorId: row.creator_id,
     priority: row.priority ?? 50,
-    id: ch.youtube_id,
-    title: ch.title,
-    description: ch.description || "",
-    customUrl: ch.custom_url || "",
-    thumbnailUrl: ch.thumbnail_url || "",
-    bannerUrl: ch.banner_url || null,
-    subscriberCount: String(ch.subscriber_count),
-    videoCount: String(ch.video_count),
-    viewCount: String(ch.view_count),
+    id: row.youtube_id,
+    title: row.title,
+    description: row.description || "",
+    customUrl: row.custom_url || "",
+    thumbnailUrl: row.thumbnail_url || "",
+    bannerUrl: row.banner_url || null,
+    subscriberCount: String(row.subscriber_count),
+    videoCount: String(row.video_count),
+    viewCount: String(row.view_count),
     publishedAt: "",
   };
 }
 
-async function upsertChannel(channel: Channel) {
-  const { error } = await supabase.from("channels").upsert(
-    {
-      youtube_id: channel.id,
-      title: channel.title,
-      description: channel.description,
-      custom_url: channel.customUrl,
-      thumbnail_url: channel.thumbnailUrl,
-      banner_url: channel.bannerUrl,
-      subscriber_count: parseInt(channel.subscriberCount, 10) || 0,
-      subscriber_count_hidden:
-        channel.subscriberCount === "0" || !channel.subscriberCount,
-      video_count: parseInt(channel.videoCount, 10) || 0,
-      view_count: parseInt(channel.viewCount, 10) || 0,
-      published_at: channel.publishedAt || null,
-      fetched_at: new Date().toISOString(),
-    },
-    { onConflict: "youtube_id" }
-  );
-  if (error) console.error("Failed to upsert channel:", error);
-}
+async function fetchCuratedChannels(): Promise<Channel[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("channels")
+    .select(
+      "youtube_id, title, description, custom_url, thumbnail_url, banner_url, subscriber_count, video_count, view_count, published_at, priority"
+    )
+    .order("display_order", { ascending: true });
 
-function dbRowToChannel(row: {
-  youtube_id: string;
-  title: string;
-  description: string | null;
-  custom_url: string | null;
-  thumbnail_url: string | null;
-  banner_url: string | null;
-  subscriber_count: number;
-  video_count: number;
-  view_count: number;
-  published_at: string | null;
-}): Channel {
-  return {
+  if (error) throw new Error("Failed to load channels");
+
+  return (data || []).map((row) => ({
     id: row.youtube_id,
     title: row.title,
     description: row.description || "",
@@ -196,25 +165,8 @@ function dbRowToChannel(row: {
     videoCount: String(row.video_count),
     viewCount: String(row.view_count),
     publishedAt: row.published_at || "",
-    priority: 50,
-  };
-}
-
-async function fetchCuratedChannels(): Promise<Channel[]> {
-  const { data, error } = await supabase
-    .from("curated_channels")
-    .select("channel_id, display_order, channels(*)")
-    .order("display_order", { ascending: true });
-
-  if (error) throw new Error("Failed to load curated channels");
-
-  return (data || [])
-    .filter((row) => row.channels)
-    .map((row) =>
-      dbRowToChannel(
-        row.channels as unknown as Parameters<typeof dbRowToChannel>[0]
-      )
-    );
+    priority: row.priority ?? 50,
+  }));
 }
 
 async function fetchCreatorsData(): Promise<CreatorsResponse> {
@@ -229,6 +181,7 @@ interface VideoCounts {
 }
 
 async function fetchVideoCounts(): Promise<Map<string, VideoCounts>> {
+  const supabase = createClient();
   const { data, error } = await supabase.rpc("video_counts_by_channel");
   if (error) throw new Error("Failed to load video counts");
   const map = new Map<string, VideoCounts>();
@@ -358,16 +311,27 @@ export default function AdminPage() {
 
   const addChannel = useCallback(
     async (channel: Channel) => {
+      const supabase = createClient();
       if (curatedChannels.some((c) => c.id === channel.id)) {
         toast.info(`${channel.title} is already in your list`);
         return;
       }
 
-      await upsertChannel(channel);
-
       const nextOrder = curatedChannels.length;
-      const { error } = await supabase.from("curated_channels").insert({
-        channel_id: channel.id,
+      const { error } = await supabase.from("channels").insert({
+        youtube_id: channel.id,
+        title: channel.title,
+        description: channel.description,
+        custom_url: channel.customUrl,
+        thumbnail_url: channel.thumbnailUrl,
+        banner_url: channel.bannerUrl,
+        subscriber_count: parseInt(channel.subscriberCount, 10) || 0,
+        subscriber_count_hidden:
+          channel.subscriberCount === "0" || !channel.subscriberCount,
+        video_count: parseInt(channel.videoCount, 10) || 0,
+        view_count: parseInt(channel.viewCount, 10) || 0,
+        published_at: channel.publishedAt || null,
+        fetched_at: new Date().toISOString(),
         display_order: nextOrder,
       });
 
@@ -376,7 +340,7 @@ export default function AdminPage() {
           toast.info(`${channel.title} is already in your list`);
         } else {
           toast.error("Failed to save channel");
-          console.error("Insert curated_channels error:", error);
+          console.error("Insert channels error:", error);
         }
         return;
       }
@@ -390,14 +354,15 @@ export default function AdminPage() {
 
   const removeChannel = useCallback(
     async (channelId: string) => {
+      const supabase = createClient();
       const { error } = await supabase
-        .from("curated_channels")
+        .from("channels")
         .delete()
-        .eq("channel_id", channelId);
+        .eq("youtube_id", channelId);
 
       if (error) {
         toast.error("Failed to remove channel");
-        console.error("Delete curated_channels error:", error);
+        console.error("Delete channels error:", error);
         return;
       }
 
@@ -415,6 +380,7 @@ export default function AdminPage() {
     setIsCreatingCreator(true);
 
     try {
+      const supabase = createClient();
       const name = newCreatorName.trim();
       const slug = slugify(name);
 
@@ -457,6 +423,7 @@ export default function AdminPage() {
   const deleteCreator = useCallback(
     async (creatorId: string, creatorName: string) => {
       try {
+        const supabase = createClient();
         const { error } = await supabase
           .from("creators")
           .delete()
@@ -478,40 +445,20 @@ export default function AdminPage() {
 
   const assignChannelToCreator = useCallback(
     async (
-      curatedId: string,
+      channelId: string,
       creatorId: string | null,
       channelTitle: string
     ) => {
       try {
+        const supabase = createClient();
         const { error } = await supabase
-          .from("curated_channels")
+          .from("channels")
           .update({ creator_id: creatorId })
-          .eq("id", curatedId);
+          .eq("youtube_id", channelId);
 
         if (error) {
           toast.error("Failed to move channel");
           return;
-        }
-
-        // If assigning to a creator, auto-set avatar/cover if not yet set
-        if (creatorId) {
-          const creator = creators.find((c) => c.id === creatorId);
-          if (creator && !creator.avatar_channel_id) {
-            const allChannels = [
-              ...creators.flatMap((c) => c.curated_channels),
-              ...ungroupedChannels,
-            ];
-            const curatedRow = allChannels.find((c) => c.id === curatedId);
-            if (curatedRow) {
-              await supabase
-                .from("creators")
-                .update({
-                  avatar_channel_id: curatedRow.channel_id,
-                  cover_channel_id: curatedRow.channel_id,
-                })
-                .eq("id", creatorId);
-            }
-          }
         }
 
         queryClient.invalidateQueries({ queryKey: ["creators"] });
@@ -524,16 +471,17 @@ export default function AdminPage() {
         toast.error("Failed to move channel");
       }
     },
-    [creators, ungroupedChannels, queryClient]
+    [queryClient]
   );
 
   const updateChannelPriority = useCallback(
-    async (curatedId: string, priority: number) => {
+    async (channelId: string, priority: number) => {
       try {
+        const supabase = createClient();
         const { error } = await supabase
-          .from("curated_channels")
+          .from("channels")
           .update({ priority })
-          .eq("id", curatedId);
+          .eq("youtube_id", channelId);
         if (error) {
           toast.error("Failed to update priority");
           return;
@@ -547,12 +495,13 @@ export default function AdminPage() {
   );
 
   const updateDateRange = useCallback(
-    async (curatedId: string, dateRangeOverride: string | null) => {
+    async (channelId: string, dateRangeOverride: string | null) => {
       try {
+        const supabase = createClient();
         const { error } = await supabase
-          .from("curated_channels")
+          .from("channels")
           .update({ date_range_override: dateRangeOverride })
-          .eq("id", curatedId);
+          .eq("youtube_id", channelId);
         if (error) {
           toast.error("Failed to update date range");
           return;
@@ -567,12 +516,13 @@ export default function AdminPage() {
   );
 
   const updateMinDuration = useCallback(
-    async (curatedId: string, minDuration: number | null) => {
+    async (channelId: string, minDuration: number | null) => {
       try {
+        const supabase = createClient();
         const { error } = await supabase
-          .from("curated_channels")
+          .from("channels")
           .update({ min_duration_override: minDuration })
-          .eq("id", curatedId);
+          .eq("youtube_id", channelId);
         if (error) {
           toast.error("Failed to update min duration");
           return;
@@ -587,12 +537,13 @@ export default function AdminPage() {
   );
 
   const updateMaxVideos = useCallback(
-    async (curatedId: string, maxVideos: number | null) => {
+    async (channelId: string, maxVideos: number | null) => {
       try {
+        const supabase = createClient();
         const { error } = await supabase
-          .from("curated_channels")
+          .from("channels")
           .update({ max_videos_override: maxVideos })
-          .eq("id", curatedId);
+          .eq("youtube_id", channelId);
         if (error) {
           toast.error("Failed to update max videos");
           return;
@@ -607,18 +558,46 @@ export default function AdminPage() {
   );
 
   const updateSyncMode = useCallback(
-    async (curatedId: string, syncMode: string) => {
+    async (channelId: string, syncMode: string) => {
       try {
+        const supabase = createClient();
         const { error } = await supabase
-          .from("curated_channels")
+          .from("channels")
           .update({ sync_mode: syncMode })
-          .eq("id", curatedId);
+          .eq("youtube_id", channelId);
         if (error) {
           toast.error("Failed to update sync mode");
           return;
         }
+
+        // Switching INTO review: demote in-flight auto candidates so they
+        // hit the review queue instead of getting auto-downloaded.
+        // (See "Switching an existing channel into review mode" in the docs.)
+        if (syncMode === "review") {
+          const { data: demoted, error: demoteErr } = await supabase
+            .from("videos")
+            .update({ decision: "pending" })
+            .eq("channel_id", channelId)
+            .eq("decision", "auto")
+            .is("r2_synced_at", null)
+            .select("youtube_id");
+
+          if (demoteErr) {
+            toast.warning("Mode set, but couldn't demote pending downloads");
+          } else if (demoted && demoted.length > 0) {
+            toast.success(
+              `Review mode — ${demoted.length} video${demoted.length === 1 ? "" : "s"} sent to review queue`
+            );
+          } else {
+            toast.success("Sync mode: review");
+          }
+        } else {
+          toast.success(`Sync mode: ${syncMode}`);
+        }
+
         queryClient.invalidateQueries({ queryKey: ["creators"] });
-        toast.success(`Sync mode: ${syncMode}`);
+        queryClient.invalidateQueries({ queryKey: ["pending-channels"] });
+        queryClient.invalidateQueries({ queryKey: ["pending-videos"] });
       } catch {
         toast.error("Failed to update sync mode");
       }
@@ -629,6 +608,7 @@ export default function AdminPage() {
   const updateCreatorPriority = useCallback(
     async (creatorId: string, priority: number) => {
       try {
+        const supabase = createClient();
         const { error } = await supabase
           .from("creators")
           .update({ priority })
@@ -646,14 +626,12 @@ export default function AdminPage() {
   );
 
   const updateCreatorAvatar = useCallback(
-    async (creatorId: string, channelId: string) => {
+    async (creatorId: string, thumbnailUrl: string | null) => {
       try {
+        const supabase = createClient();
         const { error } = await supabase
           .from("creators")
-          .update({
-            avatar_channel_id: channelId,
-            cover_channel_id: channelId,
-          })
+          .update({ thumbnail_url: thumbnailUrl })
           .eq("id", creatorId);
 
         if (error) {
@@ -672,21 +650,6 @@ export default function AdminPage() {
   );
 
   const isCurated = (id: string) => curatedChannels.some((c) => c.id === id);
-
-  // ─── Get avatar for a creator ──────────────────────────────────────
-
-  function getCreatorAvatar(creator: Creator): string | null {
-    if (creator.avatar_channel_id) {
-      const ch = creator.curated_channels.find(
-        (c) => c.channel_id === creator.avatar_channel_id
-      );
-      if (ch?.channels?.thumbnail_url) return ch.channels.thumbnail_url;
-    }
-    if (creator.curated_channels.length > 0) {
-      return creator.curated_channels[0].channels?.thumbnail_url || null;
-    }
-    return null;
-  }
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -725,6 +688,20 @@ export default function AdminPage() {
                 {totalUploaded}
               </span>
             </div>
+            <Link
+              href="/admin/review"
+              className="rounded-xl p-2 text-muted-foreground transition-all hover:bg-primary/10 hover:text-primary"
+              title="Review pending videos"
+            >
+              <ClipboardCheck className="h-4 w-4" />
+            </Link>
+            <Link
+              href="/admin/subscriptions"
+              className="rounded-xl p-2 text-muted-foreground transition-all hover:bg-primary/10 hover:text-primary"
+              title="Manage subscriptions"
+            >
+              <Users className="h-4 w-4" />
+            </Link>
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="rounded-xl p-2 text-muted-foreground transition-all hover:bg-primary/10 hover:text-primary"
@@ -842,10 +819,10 @@ export default function AdminPage() {
                 {/* Creator groups */}
                 {creators.map((creator, i) => {
                   // groups always expanded — no collapse
-                  const avatar = getCreatorAvatar(creator);
-                  const channelCount = creator.curated_channels.length;
-                  const groupR2 = creator.curated_channels.reduce(
-                    (s, cc) => s + (videoCounts.get(cc.channel_id)?.uploaded ?? 0),
+                  const avatar = creator.thumbnail_url;
+                  const channelCount = creator.channels.length;
+                  const groupR2 = creator.channels.reduce(
+                    (s, ch) => s + (videoCounts.get(ch.youtube_id)?.uploaded ?? 0),
                     0
                   );
 
@@ -859,7 +836,7 @@ export default function AdminPage() {
                           title="Change avatar"
                         >
                           {avatar ? (
-                            <Image src={avatar} alt={creator.name} fill className="object-cover" sizes="42px" />
+                            <img src={avatar} alt={creator.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
                           ) : (
                             <span className="flex h-full w-full items-center justify-center bg-secondary text-xs font-bold text-muted-foreground">
                               {creator.name.charAt(0)}
@@ -893,27 +870,24 @@ export default function AdminPage() {
                       </div>
 
                       {/* Avatar picker row */}
-                      {editingAvatar === creator.id && creator.curated_channels.length > 0 && (
+                      {editingAvatar === creator.id && creator.channels.length > 0 && (
                         <div className="tt-avatar-picker">
                           <span className="font-body text-[11px] tracking-wider text-muted-foreground uppercase">
                             Avatar:
                           </span>
-                          {creator.curated_channels.map((cc) => (
+                          {creator.channels.map((ch) => (
                             <button
-                              key={cc.id}
-                              onClick={() => updateCreatorAvatar(creator.id, cc.channel_id)}
-                              className={`tt-avatar-option ${
-                                cc.channel_id === creator.avatar_channel_id ? "tt-avatar-option-active" : ""
-                              }`}
-                              title={cc.channels?.title}
+                              key={ch.youtube_id}
+                              onClick={() => updateCreatorAvatar(creator.id, ch.thumbnail_url)}
+                              className="tt-avatar-option"
+                              title={ch.title}
                             >
-                              {cc.channels?.thumbnail_url && (
-                                <Image
-                                  src={cc.channels.thumbnail_url}
-                                  alt={cc.channels.title}
-                                  fill
-                                  className="object-cover"
-                                  sizes="32px"
+                              {ch.thumbnail_url && (
+                                <img
+                                  src={ch.thumbnail_url}
+                                  alt={ch.title}
+                                  loading="lazy"
+                                  className="absolute inset-0 h-full w-full object-cover"
                                 />
                               )}
                             </button>
@@ -923,17 +897,17 @@ export default function AdminPage() {
 
                       {/* Channel child rows */}
                       <div className="tt-channels">
-                          {creator.curated_channels.length === 0 ? (
+                          {creator.channels.length === 0 ? (
                             <div className="tt-channel-empty">
                               <span className="font-body text-sm text-muted-foreground">
                                 No channels — search and add some
                               </span>
                             </div>
                           ) : (
-                            creator.curated_channels.map((cc) => (
+                            creator.channels.map((ch) => (
                               <ChannelTreeRow
-                                key={cc.id}
-                                cc={cc}
+                                key={ch.youtube_id}
+                                ch={ch}
                                 videoCounts={videoCounts}
                                 onRemove={removeChannel}
                                 creators={creators}
@@ -965,10 +939,10 @@ export default function AdminPage() {
                     </div>
 
                     <div className="tt-channels">
-                      {ungroupedChannels.map((cc) => (
+                      {ungroupedChannels.map((ch) => (
                         <ChannelTreeRow
-                          key={cc.id}
-                          cc={cc}
+                          key={ch.youtube_id}
+                          ch={ch}
                           videoCounts={videoCounts}
                           onRemove={removeChannel}
                           creators={creators}
@@ -1168,17 +1142,17 @@ function DropdownDismissListeners({
 
 /** Move-to-group dropdown */
 function MoveToGroupDropdown({
-  curatedId,
+  channelId,
   currentCreatorId,
   channelTitle,
   creators,
   onAssign,
 }: {
-  curatedId: string;
+  channelId: string;
   currentCreatorId: string | null;
   channelTitle: string;
   creators: Creator[];
-  onAssign: (curatedId: string, creatorId: string | null, title: string) => void;
+  onAssign: (channelId: string, creatorId: string | null, title: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; flipUp: boolean }>({ top: 0, left: 0, flipUp: false });
@@ -1227,7 +1201,7 @@ function MoveToGroupDropdown({
               Move to
             </p>
             <button
-              onClick={() => { onAssign(curatedId, null, channelTitle); setOpen(false); }}
+              onClick={() => { onAssign(channelId, null, channelTitle); setOpen(false); }}
               className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-body text-sm transition-colors hover:bg-secondary ${
                 currentCreatorId === null ? "text-foreground font-semibold" : "text-foreground"
               }`}
@@ -1242,7 +1216,7 @@ function MoveToGroupDropdown({
             {creators.map((creator) => (
               <button
                 key={creator.id}
-                onClick={() => { onAssign(curatedId, creator.id, channelTitle); setOpen(false); }}
+                onClick={() => { onAssign(channelId, creator.id, channelTitle); setOpen(false); }}
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-body text-sm transition-colors hover:bg-secondary ${
                   currentCreatorId === creator.id ? "text-foreground font-semibold" : "text-foreground"
                 }`}
@@ -1262,26 +1236,22 @@ function MoveToGroupDropdown({
 
 /** Local-state input that saves on blur or Enter */
 function MinDurationInput({
-  curatedId,
+  channelId,
   value,
   onChange,
 }: {
-  curatedId: string;
+  channelId: string;
   value: number | null | undefined;
-  onChange: (curatedId: string, value: number | null) => void;
+  onChange: (channelId: string, value: number | null) => void;
 }) {
   const [local, setLocal] = useState(value != null ? String(value) : "");
-
-  useEffect(() => {
-    setLocal(value != null ? String(value) : "");
-  }, [value]);
 
   const save = () => {
     const trimmed = local.trim();
     const next = trimmed === "" ? null : parseInt(trimmed, 10);
     const prev = value ?? null;
     if (next !== prev) {
-      onChange(curatedId, Number.isNaN(next) ? null : next);
+      onChange(channelId, Number.isNaN(next) ? null : next);
     }
   };
 
@@ -1305,26 +1275,22 @@ function MinDurationInput({
 
 /** Local-state input for max videos per channel */
 function MaxVideosInput({
-  curatedId,
+  channelId,
   value,
   onChange,
 }: {
-  curatedId: string;
+  channelId: string;
   value: number | null | undefined;
-  onChange: (curatedId: string, value: number | null) => void;
+  onChange: (channelId: string, value: number | null) => void;
 }) {
   const [local, setLocal] = useState(value != null ? String(value) : "");
-
-  useEffect(() => {
-    setLocal(value != null ? String(value) : "");
-  }, [value]);
 
   const save = () => {
     const trimmed = local.trim();
     const next = trimmed === "" ? null : parseInt(trimmed, 10);
     const prev = value ?? null;
     if (next !== prev) {
-      onChange(curatedId, Number.isNaN(next) || (next !== null && next < 1) ? null : next);
+      onChange(channelId, Number.isNaN(next) || (next !== null && next < 1) ? null : next);
     }
   };
 
@@ -1348,7 +1314,7 @@ function MaxVideosInput({
 
 /** Single channel row inside the tree table */
 function ChannelTreeRow({
-  cc,
+  ch,
   videoCounts,
   onRemove,
   creators,
@@ -1359,42 +1325,42 @@ function ChannelTreeRow({
   onMaxVideosChange,
   onSyncModeChange,
 }: {
-  cc: CuratedChannelRow;
+  ch: ChannelRow;
   videoCounts: Map<string, VideoCounts>;
   onRemove: (channelId: string) => void;
   creators: Creator[];
-  onAssign: (curatedId: string, creatorId: string | null, title: string) => void;
-  onPriorityChange: (curatedId: string, priority: number) => void;
-  onDateRangeChange: (curatedId: string, value: string | null) => void;
-  onMinDurationChange: (curatedId: string, value: number | null) => void;
-  onMaxVideosChange: (curatedId: string, value: number | null) => void;
-  onSyncModeChange: (curatedId: string, value: string) => void;
+  onAssign: (channelId: string, creatorId: string | null, title: string) => void;
+  onPriorityChange: (channelId: string, priority: number) => void;
+  onDateRangeChange: (channelId: string, value: string | null) => void;
+  onMinDurationChange: (channelId: string, value: number | null) => void;
+  onMaxVideosChange: (channelId: string, value: number | null) => void;
+  onSyncModeChange: (channelId: string, value: string) => void;
 }) {
-  const ch = rowToChannel(cc);
-  const uploaded = videoCounts.get(cc.channel_id)?.uploaded ?? 0;
-  const totalVids = parseInt(ch.videoCount, 10) || 0;
+  const view = rowToChannel(ch);
+  const uploaded = videoCounts.get(ch.youtube_id)?.uploaded ?? 0;
+  const totalVids = parseInt(view.videoCount, 10) || 0;
 
   // Normalize legacy "19700101" (epoch) to "all" for pill matching
-  const rangeValue = cc.date_range_override === "19700101" ? "all" : (cc.date_range_override ?? "");
+  const rangeValue = ch.date_range_override === "19700101" ? "all" : (ch.date_range_override ?? "");
 
   return (
     <div className="tt-channel">
       <div className="tt-ch-thumb">
-        <Image src={ch.thumbnailUrl} alt={ch.title} fill className="object-cover" sizes="36px" />
+        <img src={view.thumbnailUrl} alt={view.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
       </div>
       <div className="tt-ch-body">
         <div className="tt-ch-top">
-          <span className="tt-ch-title">{ch.title}</span>
+          <span className="tt-ch-title">{view.title}</span>
           <div className="tt-ch-actions">
             <MoveToGroupDropdown
-              curatedId={cc.id}
-              currentCreatorId={ch.creatorId}
-              channelTitle={ch.title}
+              channelId={ch.youtube_id}
+              currentCreatorId={view.creatorId}
+              channelTitle={view.title}
               creators={creators}
               onAssign={onAssign}
             />
             <a
-              href={`https://www.youtube.com/${ch.customUrl}`}
+              href={`https://www.youtube.com/${view.customUrl}`}
               target="_blank"
               rel="noopener noreferrer"
               className="tt-action-btn"
@@ -1403,7 +1369,7 @@ function ChannelTreeRow({
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
             <button
-              onClick={() => onRemove(ch.id)}
+              onClick={() => onRemove(ch.youtube_id)}
               className="tt-action-btn tt-action-danger"
               title="Remove channel"
             >
@@ -1412,7 +1378,7 @@ function ChannelTreeRow({
           </div>
         </div>
         <div className="tt-ch-meta">
-          <StarRating value={ch.priority} onChange={(v) => onPriorityChange(cc.id, v)} size={15} />
+          <StarRating value={view.priority} onChange={(v) => onPriorityChange(ch.youtube_id, v)} size={15} />
           <span className="tt-dot">&middot;</span>
           <span className={`tt-sync ${uploaded > 0 ? "tt-sync-ok" : ""}`}>
             {uploaded}<span className="tt-sync-total">/{formatCount(totalVids)}</span>
@@ -1422,7 +1388,7 @@ function ChannelTreeRow({
             {DATE_RANGE_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
-                onClick={() => onDateRangeChange(cc.id, opt.value || null)}
+                onClick={() => onDateRangeChange(ch.youtube_id, opt.value || null)}
                 className={`tt-range-pill ${rangeValue === opt.value ? "tt-range-pill-active" : ""}`}
               >
                 {opt.label}
@@ -1430,20 +1396,74 @@ function ChannelTreeRow({
             ))}
           </div>
           <span className="tt-dot">&middot;</span>
-          <MinDurationInput curatedId={cc.id} value={cc.min_duration_override} onChange={onMinDurationChange} />
+          <MinDurationInput key={`min-${ch.youtube_id}-${ch.min_duration_override ?? "null"}`} channelId={ch.youtube_id} value={ch.min_duration_override} onChange={onMinDurationChange} />
           <span className="tt-dot">&middot;</span>
-          <MaxVideosInput curatedId={cc.id} value={cc.max_videos_override} onChange={onMaxVideosChange} />
+          <MaxVideosInput key={`max-${ch.youtube_id}-${ch.max_videos_override ?? "null"}`} channelId={ch.youtube_id} value={ch.max_videos_override} onChange={onMaxVideosChange} />
           <span className="tt-dot">&middot;</span>
-          <button
-            onClick={() => onSyncModeChange(cc.id, cc.sync_mode === "archive" ? "sync" : "archive")}
-            className={`tt-sync-mode-toggle ${cc.sync_mode === "archive" ? "tt-sync-mode-archive" : ""}`}
-            title={cc.sync_mode === "archive" ? "Archive mode — keeps all videos permanently" : "Sync mode — rolling window, removes old videos"}
-          >
-            <Archive className="h-3 w-3" />
-            <span>{cc.sync_mode === "archive" ? "Archive" : "Sync"}</span>
-          </button>
+          <SyncModePills
+            channelId={ch.youtube_id}
+            value={ch.sync_mode}
+            onChange={onSyncModeChange}
+          />
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 3-way sync-mode segmented control: sync | archive | review */
+function SyncModePills({
+  channelId,
+  value,
+  onChange,
+}: {
+  channelId: string;
+  value: string;
+  onChange: (channelId: string, mode: string) => void;
+}) {
+  const modes: Array<{
+    key: "sync" | "archive" | "review";
+    label: string;
+    icon: React.ReactNode;
+    title: string;
+  }> = [
+    {
+      key: "sync",
+      label: "Sync",
+      icon: <CloudCog className="h-3 w-3" />,
+      title: "Sync — rolling window, auto-downloads new uploads",
+    },
+    {
+      key: "archive",
+      label: "Archive",
+      icon: <Archive className="h-3 w-3" />,
+      title: "Archive — keeps every video permanently",
+    },
+    {
+      key: "review",
+      label: "Review",
+      icon: <ClipboardCheck className="h-3 w-3" />,
+      title: "Review — every new video waits for human approval",
+    },
+  ];
+  return (
+    <div className="tt-mode-pills" role="tablist" aria-label="Sync mode">
+      {modes.map((m) => {
+        const active = value === m.key;
+        return (
+          <button
+            key={m.key}
+            role="tab"
+            aria-selected={active}
+            onClick={() => !active && onChange(channelId, m.key)}
+            className={`tt-mode-pill tt-mode-pill-${m.key} ${active ? "tt-mode-pill-active" : ""}`}
+            title={m.title}
+          >
+            {m.icon}
+            <span>{m.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1462,12 +1482,11 @@ function SearchResultCard({
     <Card className="search-result-card border-0 p-0">
       <div className="flex items-center gap-3 p-3">
         <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg ring-1 ring-border">
-          <Image
+          <img
             src={channel.thumbnailUrl}
             alt={channel.title}
-            fill
-            className="object-cover"
-            sizes="40px"
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover"
           />
         </div>
         <div className="min-w-0 flex-1">

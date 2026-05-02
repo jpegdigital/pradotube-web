@@ -8,13 +8,16 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "types:gen": "npx supabase gen types typescript --project-id kwtczgqcllbpaykibgzx --schema pradotube > src/lib/supabase/database.types.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
-    "@supabase/ssr": "^0.9.0",
+    "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.99.3",
     "@tanstack/react-query": "^5.91.2",
+    "@tanstack/react-virtual": "^3.13.24",
+    "@vidstack/react": "^1.12.13",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hls.js": "^1.6.15",

@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 import { getChannelVideos } from "@/lib/youtube";
+import { hasAdminGroup, type JwtClaims } from "@/lib/auth/jwt";
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
   // Auth: admin-only (protects YouTube API quota)
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    { cookies: { getAll: () => request.cookies.getAll(), setAll() {} } }
-  );
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user || user.app_metadata?.role !== "admin") {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  if (!hasAdminGroup(data?.claims as JwtClaims | null | undefined)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

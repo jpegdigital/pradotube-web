@@ -37,8 +37,15 @@ yarn-error.log*
 # local config
 .claude/settings.local.json
 .claude/launch.json
+.claude/scheduled_tasks.lock
 .mcp.json
 .firecrawl/
+
+# dev server logs
+.next-dev*.log
+
+# supabase cli local state
+/supabase/.temp/
 
 # vercel
 .vercel

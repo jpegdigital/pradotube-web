@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { useMountEffect } from "@/hooks/use-mount-effect";
 import Link from "next/link";
-import Image from "next/image";
 import {
   Tv,
   Sun,
@@ -15,15 +14,18 @@ import {
   Check,
   X,
 } from "lucide-react";
+import { Toaster, toast } from "sonner";
 import { Card } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/browser";
 
 /* ─── Types ─── */
 
-interface Profile {
-  user_id: string;
-  display_name: string;
-  role: string;
+interface UserRow {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  is_admin: boolean;
 }
 
 interface Creator {
@@ -41,34 +43,30 @@ interface Subscription {
 
 /* ─── Data fetching ─── */
 
-const supabase = createClient();
-
-async function fetchProfiles(): Promise<Profile[]> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("user_id, display_name, role")
-    .order("role", { ascending: true })
-    .order("display_name", { ascending: true });
-  if (error) throw new Error("Failed to load profiles");
-  return data ?? [];
+async function fetchUsers(): Promise<UserRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("list_users");
+  if (error) throw new Error("Failed to load users");
+  return (data ?? []) as UserRow[];
 }
 
 async function fetchCreators(): Promise<Creator[]> {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("creators")
-    .select("id, name, slug, avatar_channel_id, channels:channels!avatar_channel_id(thumbnail_url)")
+    .select("id, name, slug, thumbnail_url")
     .order("name", { ascending: true });
   if (error) throw new Error("Failed to load creators");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((c: any) => ({
+  return (data ?? []).map((c) => ({
     id: c.id,
     name: c.name,
     slug: c.slug,
-    avatar_url: c.channels?.thumbnail_url ?? null,
+    avatar_url: c.thumbnail_url,
   }));
 }
 
 async function fetchSubscriptions(): Promise<Subscription[]> {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("user_subscriptions")
     .select("id, user_id, creator_id");
@@ -84,9 +82,9 @@ export default function SubscriptionsPage() {
   useMountEffect(() => setMounted(true));
   const queryClient = useQueryClient();
 
-  const { data: profiles = [], isLoading: loadingProfiles } = useQuery({
-    queryKey: ["admin-profiles"],
-    queryFn: fetchProfiles,
+  const { data: users = [], isLoading: loadingUsers } = useQuery({
+    queryKey: ["admin-users"],
+    queryFn: fetchUsers,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -102,7 +100,7 @@ export default function SubscriptionsPage() {
     staleTime: 60 * 1000,
   });
 
-  const isLoading = loadingProfiles || loadingCreators || loadingSubs;
+  const isLoading = loadingUsers || loadingCreators || loadingSubs;
 
   // Build a set for quick lookup: "userId:creatorId"
   const subSet = new Set(subscriptions.map((s) => `${s.user_id}:${s.creator_id}`));
@@ -117,6 +115,7 @@ export default function SubscriptionsPage() {
       creatorId: string;
       isSubscribed: boolean;
     }) => {
+      const supabase = createClient();
       if (isSubscribed) {
         // Remove subscription
         const { error } = await supabase
@@ -143,15 +142,19 @@ export default function SubscriptionsPage() {
             (s) => !(s.user_id === userId && s.creator_id === creatorId)
           );
         }
-        return [...old, { id: crypto.randomUUID(), user_id: userId, creator_id: creatorId }];
+        return [...old, { id: `optimistic-${userId}-${creatorId}`, user_id: userId, creator_id: creatorId }];
       });
 
       return { previous };
     },
-    onError: (_err, _vars, context) => {
+    onError: (err, _vars, context) => {
       if (context?.previous) {
         queryClient.setQueryData(["admin-subscriptions"], context.previous);
       }
+      console.error("[subscriptions toggle]", err);
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update subscription"
+      );
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-subscriptions"] });
@@ -172,6 +175,7 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Toaster position="top-center" richColors />
       {/* Header */}
       <header className="player-header sticky top-0 z-50 border-b border-border/50 px-5 py-3">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -211,43 +215,46 @@ export default function SubscriptionsPage() {
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
-        ) : profiles.length === 0 || creators.length === 0 ? (
+        ) : users.length === 0 || creators.length === 0 ? (
           <div className="text-center py-20">
             <p className="font-body text-muted-foreground">
-              {profiles.length === 0
+              {users.length === 0
                 ? "No user accounts found. Create users in the Supabase Dashboard first."
                 : "No creators found. Add creators in the admin panel first."}
             </p>
           </div>
         ) : (
           <div className="space-y-8">
-            {profiles.map((profile) => (
-              <Card key={profile.user_id} className="p-6">
+            {users.map((u) => {
+              const displayName =
+                u.first_name ?? u.email.split("@")[0] ?? "User";
+              return (
+              <Card key={u.id} className="p-6">
                 <div className="flex items-center gap-3 mb-5">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/5 ring-1 ring-primary/20">
                     <span className="font-heading text-sm text-primary font-semibold">
-                      {profile.display_name.charAt(0).toUpperCase()}
+                      {displayName.charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div>
                     <h2 className="font-heading text-lg text-foreground">
-                      {profile.display_name}
+                      {displayName}
                     </h2>
                     <span className="font-body text-xs text-muted-foreground">
-                      {profile.role === "admin" ? "Parent (Admin)" : "Member"}
+                      {u.is_admin ? "Parent (Admin)" : "Member"}
                     </span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                   {creators.map((creator) => {
-                    const key = `${profile.user_id}:${creator.id}`;
+                    const key = `${u.id}:${creator.id}`;
                     const isSubscribed = subSet.has(key);
                     return (
                       <button
                         key={creator.id}
                         onClick={() =>
-                          handleToggle(profile.user_id, creator.id)
+                          handleToggle(u.id, creator.id)
                         }
                         className={`relative flex flex-col items-center gap-2 rounded-xl p-3 transition-all border-2 ${
                           isSubscribed
@@ -273,12 +280,11 @@ export default function SubscriptionsPage() {
                         {/* Avatar */}
                         <div className="relative h-12 w-12 overflow-hidden rounded-full bg-secondary ring-1 ring-border/30">
                           {creator.avatar_url ? (
-                            <Image
+                            <img
                               src={creator.avatar_url}
                               alt={creator.name}
-                              fill
-                              className="object-cover"
-                              sizes="48px"
+                              loading="lazy"
+                              className="absolute inset-0 h-full w-full object-cover"
                             />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
@@ -297,7 +303,8 @@ export default function SubscriptionsPage() {
                   })}
                 </div>
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
