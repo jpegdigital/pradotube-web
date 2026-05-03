@@ -17,7 +17,7 @@ function PlayerSkeleton({
   title: string;
 }) {
   return (
-    <div className="absolute inset-0 bg-black">
+    <div className="absolute inset-0">
       {thumbnail ? (
         <img
           src={thumbnail}

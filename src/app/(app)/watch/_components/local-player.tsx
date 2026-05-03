@@ -38,9 +38,9 @@ export function LocalPlayer({ mediaPath, thumbnail, title }: LocalPlayerProps) {
       autoPlay
       playsInline
       crossOrigin
-      logLevel="warn"
+      logLevel="silent"
       onProviderChange={onProviderChange}
-      className="h-full w-full bg-black"
+      className="h-full w-full [--media-poster-bg:transparent] [--video-bg:transparent] [--video-border-radius:0] [--video-border:none]"
     >
       <MediaProvider>
         {thumbnail ? (

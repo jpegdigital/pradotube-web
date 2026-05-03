@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { LogOut, Moon, Sun, SunMoon, Users, Wrench } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
-import { useCurrentUser } from "@/lib/auth/current-user-store";
+import { useCurrentUserSnapshot } from "@/lib/auth/current-user-store";
 import { useMountEffect } from "@/hooks/use-mount-effect";
 
 // Rainbow palette borrowed from globals.css feature tokens.
@@ -37,13 +37,15 @@ function initialsFor(displayName: string, email: string | null) {
 }
 
 export function SettingsMenu() {
-  const currentUser = useCurrentUser();
+  const snapshot = useCurrentUserSnapshot();
   const { resolvedTheme, theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useMountEffect(() => setMounted(true));
 
-  if (!currentUser) return null;
+  if (snapshot.status === "loading") return <SettingsMenuSkeleton />;
+  if (snapshot.status === "anonymous") return null;
 
+  const currentUser = snapshot.user;
   const palette = pickPalette(currentUser.id);
   const initials = initialsFor(currentUser.displayName, currentUser.email);
   const activeTheme = mounted ? (theme ?? resolvedTheme ?? "system") : "system";
@@ -193,6 +195,18 @@ export function SettingsMenu() {
         </PopoverPrimitive.Positioner>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>
+  );
+}
+
+function SettingsMenuSkeleton() {
+  return (
+    <div
+      className="settings-pill inline-flex items-center gap-2.5 rounded-full py-1 pl-1.5 pr-1.5 sm:pr-4"
+      aria-hidden
+    >
+      <span className="h-8 w-8 animate-pulse rounded-full bg-foreground/10" />
+      <span className="hidden h-3 w-10 animate-pulse rounded-full bg-foreground/10 sm:inline-block" />
+    </div>
   );
 }
 

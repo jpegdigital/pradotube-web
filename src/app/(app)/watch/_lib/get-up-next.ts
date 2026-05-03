@@ -10,6 +10,7 @@ export interface UpNextVideo {
   thumbnailPath: string | null;
   durationSeconds: number;
   creatorName: string;
+  creatorSlug: string;
   creatorAvatar: string;
   feedRank: number;
 }
@@ -22,6 +23,7 @@ export interface UpNextPage {
 export interface GetUpNextOptions {
   limit?: number;
   cursor?: number;
+  slug?: string;
 }
 
 const DEFAULT_LIMIT = 60;
@@ -37,14 +39,13 @@ export async function getUpNext(
   let query = supabase
     .from("user_feed_scored")
     .select(
-      "video_id, title, thumbnail_url, thumbnail_path, duration_seconds, creator_name, creator_avatar, feed_rank"
+      "video_id, title, thumbnail_url, thumbnail_path, duration_seconds, creator_name, creator_slug, creator_avatar, feed_rank"
     )
     .order("feed_rank", { ascending: true })
     .limit(limit + 1);
 
-  if (opts.cursor !== undefined) {
-    query = query.gt("feed_rank", opts.cursor);
-  }
+  if (opts.slug) query = query.eq("creator_slug", opts.slug);
+  if (opts.cursor !== undefined) query = query.gt("feed_rank", opts.cursor);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -63,6 +64,7 @@ export async function getUpNext(
     thumbnailPath: r.thumbnail_path,
     durationSeconds: r.duration_seconds ?? 0,
     creatorName: r.creator_name!,
+    creatorSlug: r.creator_slug!,
     creatorAvatar: r.creator_avatar ?? "",
     feedRank: r.feed_rank!,
   }));

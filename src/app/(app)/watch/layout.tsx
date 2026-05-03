@@ -1,19 +1,21 @@
-import { UpNextSidebar } from "./_components/up-next-sidebar";
+import { UpNextDrawer } from "./_components/up-next-drawer";
 import { getUpNext } from "./_lib/get-up-next";
+import { getWatchCreators } from "./_lib/get-watch-creators";
 
 export default async function WatchLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const upNext = await getUpNext();
+  const [upNext, creators] = await Promise.all([
+    getUpNext(),
+    getWatchCreators(),
+  ]);
 
   return (
-    <div data-canvas="muted" className="px-2 pb-16 sm:px-3 lg:px-4">
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-3 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-4">
-        <div className="min-w-0">{children}</div>
-        <UpNextSidebar initialPage={upNext} />
-      </div>
+    <div data-canvas="muted" className="px-2 pb-16 sm:px-3 lg:px-5">
+      <div className="mx-auto max-w-5xl">{children}</div>
+      <UpNextDrawer initialPage={upNext} creators={creators} />
     </div>
   );
 }

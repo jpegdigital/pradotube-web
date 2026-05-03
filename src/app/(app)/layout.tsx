@@ -10,8 +10,8 @@ export default function AppLayout({
     <div className="flex min-h-screen flex-col">
       <AppCanvas />
       <AppHeader />
-      <main className="relative z-10 flex-1">{children}</main>
-      <footer className="relative z-10 py-8 text-center">
+      <main className="relative flex-1">{children}</main>
+      <footer className="relative py-8 text-center">
         <p className="font-body text-sm text-muted-foreground">
           Curated with care for little viewers
         </p>

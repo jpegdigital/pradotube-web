@@ -21,6 +21,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid limit" }, { status: 400 });
   }
 
-  const page = await getUpNext({ cursor, limit });
+  const slugParam = params.get("creator");
+  const slug = slugParam && slugParam.length > 0 ? slugParam : undefined;
+
+  const page = await getUpNext({ cursor, limit, slug });
   return NextResponse.json(page);
 }

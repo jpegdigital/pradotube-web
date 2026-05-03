@@ -8,6 +8,7 @@ import type { UpNextPage, UpNextVideo } from "../_lib/get-up-next";
 
 interface UpNextScrollerProps {
   initialPage: UpNextPage;
+  creatorSlug: string | null;
 }
 
 function formatTimestamp(seconds: number): string {
@@ -27,28 +28,40 @@ class UpNextFetchError extends Error {
   }
 }
 
-async function fetchUpNextPage(cursor: number | null): Promise<UpNextPage> {
+async function fetchUpNextPage(
+  cursor: number | null,
+  slug: string | null
+): Promise<UpNextPage> {
   const params = new URLSearchParams();
   if (cursor !== null) params.set("cursor", String(cursor));
+  if (slug) params.set("creator", slug);
   const res = await fetch(`/api/up-next?${params.toString()}`);
   if (!res.ok) throw new UpNextFetchError(res.status);
   return res.json();
 }
 
-export function UpNextScroller({ initialPage }: UpNextScrollerProps) {
+export function UpNextScroller({
+  initialPage,
+  creatorSlug,
+}: UpNextScrollerProps) {
   const { id: activeId } = useParams<{ id: string }>();
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useInfiniteQuery({
-      queryKey: ["up-next"],
-      queryFn: ({ pageParam }) => fetchUpNextPage(pageParam),
+      queryKey: ["up-next", creatorSlug],
+      queryFn: ({ pageParam }) => fetchUpNextPage(pageParam, creatorSlug),
       initialPageParam: null as number | null,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
-      initialData: {
-        pages: [initialPage],
-        pageParams: [null as number | null],
-      },
+      // Only seed React Query with the server-fetched page when we are
+      // showing the unfiltered list — filtered lists fetch fresh.
+      initialData:
+        creatorSlug === null
+          ? {
+              pages: [initialPage],
+              pageParams: [null as number | null],
+            }
+          : undefined,
     });
 
   const videos: UpNextVideo[] = useMemo(
@@ -84,6 +97,18 @@ export function UpNextScroller({ initialPage }: UpNextScrollerProps) {
     },
     [fetchNextPage, hasNextPage, isFetchingNextPage]
   );
+
+  if (videos.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center px-6 py-12 text-center">
+        <p className="font-body text-sm text-muted-foreground">
+          {creatorSlug
+            ? "Nothing here yet — try another show!"
+            : "Nothing queued up — explore the feed for more."}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div

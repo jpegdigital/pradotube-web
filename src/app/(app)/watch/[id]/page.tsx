@@ -12,8 +12,9 @@ export default async function WatchPage({
 
   return (
     <>
-      <div className="relative mt-3 aspect-video max-h-[75vh] overflow-hidden rounded-2xl bg-black shadow-xl ring-1 ring-border/30">
+      <div className="relative mt-3 aspect-video max-h-[75vh] overflow-hidden rounded-2xl shadow-xl">
         <PlayerIsland
+          key={id}
           mediaPath={video.media_path}
           thumbnail={video.thumbnail_url ?? ""}
           title={video.title ?? ""}
