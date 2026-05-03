@@ -2,43 +2,47 @@ import "server-only";
 
 import { verifySession } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
+import {
+  DEFAULT_SHOWS_DIR,
+  DEFAULT_SHOWS_SORT,
+  type ShowCreator,
+  type ShowsInitial,
+  type ShowsPage,
+  type ShowsSortDir,
+  type ShowsSortField,
+  type ShowVideo,
+} from "./types";
 
-export interface ShowVideo {
-  id: string;
-  title: string;
-  thumbnailUrl: string;
-  thumbnailPath: string | null;
-  durationSeconds: number;
-  publishedAt: string | null;
-  viewCount: number | null;
-  creatorName: string;
-  creatorAvatar: string;
-  feedRank: number;
-}
-
-export interface ShowCreator {
-  slug: string;
-  name: string;
-  avatar: string;
-}
-
-export interface ShowsPage {
-  videos: ShowVideo[];
-  nextCursor: number | null;
-}
-
-export interface ShowsInitial {
-  firstPage: ShowsPage;
-  creators: ShowCreator[];
-}
+export type {
+  ShowCreator,
+  ShowsInitial,
+  ShowsPage,
+  ShowsSortDir,
+  ShowsSortField,
+  ShowVideo,
+} from "./types";
+export {
+  DEFAULT_SHOWS_DIR,
+  DEFAULT_SHOWS_SORT,
+  SHOWS_SORT_FIELDS,
+} from "./types";
 
 export interface GetShowsPageOptions {
   slug?: string;
   cursor?: number;
   limit?: number;
+  sort?: ShowsSortField;
+  dir?: ShowsSortDir;
+  q?: string;
 }
 
 const DEFAULT_LIMIT = 24;
+const MAX_SEARCH_LENGTH = 100;
+
+// Escape ILIKE wildcards so user input is matched literally.
+function escapeIlike(input: string): string {
+  return input.replace(/[\\%_]/g, (m) => `\\${m}`);
+}
 
 export async function getShowsPage(
   opts: GetShowsPageOptions = {}
@@ -47,17 +51,27 @@ export async function getShowsPage(
   const supabase = await createClient();
 
   const limit = opts.limit ?? DEFAULT_LIMIT;
+  const sort = opts.sort ?? DEFAULT_SHOWS_SORT;
+  const dir = opts.dir ?? DEFAULT_SHOWS_DIR;
+  const offset = opts.cursor ?? 0;
 
   let query = supabase
     .from("user_feed_scored")
     .select(
-      "video_id, title, thumbnail_url, thumbnail_path, duration_seconds, published_at, view_count, creator_name, creator_avatar, feed_rank"
+      "video_id, title, thumbnail_url, thumbnail_path, duration_seconds, published_at, view_count, creator_name, creator_avatar"
     )
-    .order("feed_rank", { ascending: true })
-    .limit(limit + 1);
+    .order(sort, { ascending: dir === "asc", nullsFirst: false })
+    .order("video_id", { ascending: true })
+    .range(offset, offset + limit);
 
   if (opts.slug) query = query.eq("creator_slug", opts.slug);
-  if (opts.cursor !== undefined) query = query.gt("feed_rank", opts.cursor);
+
+  if (opts.q) {
+    const trimmed = opts.q.trim().slice(0, MAX_SEARCH_LENGTH);
+    if (trimmed) {
+      query = query.ilike("title", `%${escapeIlike(trimmed)}%`);
+    }
+  }
 
   const { data, error } = await query;
   if (error) throw error;
@@ -79,12 +93,11 @@ export async function getShowsPage(
     viewCount: r.view_count != null ? Number(r.view_count) : null,
     creatorName: r.creator_name!,
     creatorAvatar: r.creator_avatar ?? "",
-    feedRank: r.feed_rank!,
   }));
 
   return {
     videos,
-    nextCursor: hasMore ? page[page.length - 1].feed_rank ?? null : null,
+    nextCursor: hasMore ? offset + limit : null,
   };
 }
 
