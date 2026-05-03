@@ -1183,6 +1183,27 @@ textarea {
   cursor: pointer;
 }
 
+/* ─── iOS 26 Safari Liquid Glass toolbar tint sentinel ───
+   Safari 26 ignores <meta name="theme-color"> and samples background-color
+   from a position: fixed|sticky element within 4px of the viewport top.
+   Linear-gradients aren't read — only solid background-color. We hide the
+   strip just above the viewport so 4px peeks into Safari's sampling range
+   (covered visually by the iOS toolbar) without being seen by the user. */
+.ios-toolbar-tint {
+  position: fixed;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background-color: #FFB1CE;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.dark .ios-toolbar-tint {
+  background-color: #4B1E55;
+}
+
 /* ========================
    Home Page — Character Select
    ========================

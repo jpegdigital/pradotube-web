@@ -20,6 +20,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#CE82FF" },
+    { media: "(prefers-color-scheme: dark)", color: "#0E171B" },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -40,6 +44,12 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-background">
+        {/* Safari 26 (iOS/iPadOS) Liquid Glass toolbar tint sentinel.
+            Safari ignores <meta name="theme-color"> and instead samples
+            background-color on a fixed/sticky element within 4px of the
+            viewport top. Sized to sit just under the toolbar where it's
+            invisible to the user but still sampleable. */}
+        <div aria-hidden className="ios-toolbar-tint" />
         <Providers>{children}</Providers>
       </body>
     </html>
