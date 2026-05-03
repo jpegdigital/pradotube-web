@@ -201,6 +201,81 @@ export type Database = {
         }
         Relationships: []
       }
+      kid_devices: {
+        Row: {
+          created_at: string
+          device_label: string | null
+          device_secret_hash: string
+          id: string
+          kid_user_id: string
+          last_seen_at: string | null
+          parent_user_id: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          session_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          device_label?: string | null
+          device_secret_hash: string
+          id?: string
+          kid_user_id: string
+          last_seen_at?: string | null
+          parent_user_id?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          device_label?: string | null
+          device_secret_hash?: string
+          id?: string
+          kid_user_id?: string
+          last_seen_at?: string | null
+          parent_user_id?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
+      pairing_codes: {
+        Row: {
+          attempts: number
+          code: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          kid_user_id: string
+          parent_user_id: string
+        }
+        Insert: {
+          attempts?: number
+          code: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          kid_user_id: string
+          parent_user_id: string
+        }
+        Update: {
+          attempts?: number
+          code?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          kid_user_id?: string
+          parent_user_id?: string
+        }
+        Relationships: []
+      }
       user_subscriptions: {
         Row: {
           created_at: string
@@ -564,6 +639,18 @@ export type Database = {
         }
       }
       compute_unique_seconds: { Args: { p_ranges: Json }; Returns: number }
+      consume_pairing_code: {
+        Args: {
+          p_code: string
+          p_device_label: string
+          p_device_secret_hash: string
+          p_user_agent: string
+        }
+        Returns: {
+          device_id: string
+          kid_user_id: string
+        }[]
+      }
       continue_watching_for_user: {
         Args: { p_limit?: number; p_user_id: string }
         Returns: {
@@ -634,6 +721,7 @@ export type Database = {
         }[]
       }
       merge_ranges: { Args: { p_ranges: Json }; Returns: Json }
+      revoke_kid_device: { Args: { p_device_id: string }; Returns: undefined }
       search_creators: {
         Args: { p_limit?: number; p_query: string }
         Returns: {
@@ -669,6 +757,7 @@ export type Database = {
           width: number
         }[]
       }
+      touch_kid_device: { Args: { p_device_id: string }; Returns: undefined }
       upsert_watch_heartbeat: {
         Args: {
           p_duration?: number
