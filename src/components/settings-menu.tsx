@@ -176,21 +176,28 @@ export function SettingsMenu() {
               </>
             )}
 
-            <Divider />
-
-            {/* Sign out — destructive footer */}
-            <div className="px-2 py-2 pb-3">
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 font-body text-sm font-medium text-destructive transition-colors hover:bg-destructive/8"
-              >
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
-                  <LogOut className="h-3.5 w-3.5" />
-                </span>
-                Sign out
-              </button>
-            </div>
+            {/* Sign out is admin-only. Kids are paired to a dedicated device
+                via /admin/devices — clearing their session locally would just
+                bounce them through /api/session/refresh and back into a
+                session, since pt_device is still on the device. The parent
+                signs them out by revoking the device. */}
+            {currentUser.isAdmin && (
+              <>
+                <Divider />
+                <div className="px-2 py-2 pb-3">
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 font-body text-sm font-medium text-destructive transition-colors hover:bg-destructive/8"
+                  >
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+                      <LogOut className="h-3.5 w-3.5" />
+                    </span>
+                    Sign out
+                  </button>
+                </div>
+              </>
+            )}
           </PopoverPrimitive.Popup>
         </PopoverPrimitive.Positioner>
       </PopoverPrimitive.Portal>

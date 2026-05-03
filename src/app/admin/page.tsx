@@ -39,6 +39,7 @@ import {
   Archive,
   CloudCog,
   ClipboardCheck,
+  Smartphone,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -701,6 +702,13 @@ export default function AdminPage() {
               title="Manage subscriptions"
             >
               <Users className="h-4 w-4" />
+            </Link>
+            <Link
+              href="/admin/devices"
+              className="rounded-xl p-2 text-muted-foreground transition-all hover:bg-primary/10 hover:text-primary"
+              title="Manage paired iPads"
+            >
+              <Smartphone className="h-4 w-4" />
             </Link>
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
