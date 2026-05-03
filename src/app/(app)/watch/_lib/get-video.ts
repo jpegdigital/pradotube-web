@@ -5,12 +5,6 @@ import { notFound } from "next/navigation";
 import { verifySession } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
-export interface Chapter {
-  title: string;
-  start_time: number;
-  end_time: number;
-}
-
 const VIDEO_ID_RE = /^[\w-]{10,12}$/;
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
@@ -21,7 +15,7 @@ function videoQuery(supabase: SupabaseClient, id: string) {
     .select(
       `youtube_id, channel_id, title, thumbnail_url,
        thumbnail_path, media_path, published_at, duration_seconds,
-       like_count, comment_count, tags, categories, chapters,
+       like_count, comment_count, tags, categories,
        language, webpage_url, handle,
        channels(
          title,
@@ -35,8 +29,7 @@ function videoQuery(supabase: SupabaseClient, id: string) {
 
 type VideoRow = NonNullable<QueryData<ReturnType<typeof videoQuery>>>;
 
-export type Video = Omit<VideoRow, "chapters" | "media_path"> & {
-  chapters: Chapter[];
+export type Video = Omit<VideoRow, "media_path"> & {
   media_path: string;
 };
 
@@ -53,8 +46,5 @@ export async function getVideo(id: string): Promise<Video> {
   return {
     ...data,
     media_path: data.media_path,
-    chapters: Array.isArray(data.chapters)
-      ? (data.chapters as unknown as Chapter[])
-      : [],
   };
 }

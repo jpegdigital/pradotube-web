@@ -2,13 +2,12 @@
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useMemo, useRef } from "react";
-import { useMountEffect } from "@/hooks/use-mount-effect";
+import { useParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { UpNextPage, UpNextVideo } from "../_lib/get-up-next";
 
 interface UpNextScrollerProps {
   initialPage: UpNextPage;
-  activeId: string;
 }
 
 function formatTimestamp(seconds: number): string {
@@ -36,7 +35,8 @@ async function fetchUpNextPage(cursor: number | null): Promise<UpNextPage> {
   return res.json();
 }
 
-export function UpNextScroller({ initialPage, activeId }: UpNextScrollerProps) {
+export function UpNextScroller({ initialPage }: UpNextScrollerProps) {
+  const { id: activeId } = useParams<{ id: string }>();
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
@@ -56,9 +56,9 @@ export function UpNextScroller({ initialPage, activeId }: UpNextScrollerProps) {
     [data]
   );
 
-  useMountEffect(() => {
+  useEffect(() => {
     const container = scrollerRef.current;
-    if (!container) return;
+    if (!container || !activeId) return;
     const target = container.querySelector<HTMLElement>(
       `[data-video-id="${CSS.escape(activeId)}"]`
     );
@@ -66,7 +66,7 @@ export function UpNextScroller({ initialPage, activeId }: UpNextScrollerProps) {
     const containerRect = container.getBoundingClientRect();
     const targetRect = target.getBoundingClientRect();
     container.scrollTop += targetRect.top - containerRect.top;
-  });
+  }, [activeId]);
 
   const sentinelRef = useCallback(
     (node: HTMLDivElement | null) => {

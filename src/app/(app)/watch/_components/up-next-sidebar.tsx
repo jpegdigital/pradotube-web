@@ -4,10 +4,9 @@ import { UpNextScroller } from "./up-next-scroller";
 
 interface UpNextSidebarProps {
   initialPage: UpNextPage;
-  activeId: string;
 }
 
-export function UpNextSidebar({ initialPage, activeId }: UpNextSidebarProps) {
+export function UpNextSidebar({ initialPage }: UpNextSidebarProps) {
   return (
     <aside aria-label="Up next" className="hidden lg:block">
       <div className="sticky top-0 flex h-dvh flex-col py-3">
@@ -15,7 +14,7 @@ export function UpNextSidebar({ initialPage, activeId }: UpNextSidebarProps) {
           {initialPage.videos.length === 0 ? (
             <SidebarEmpty />
           ) : (
-            <UpNextScroller initialPage={initialPage} activeId={activeId} />
+            <UpNextScroller initialPage={initialPage} />
           )}
         </div>
       </div>

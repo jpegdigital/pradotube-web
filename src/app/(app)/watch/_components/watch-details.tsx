@@ -1,7 +1,6 @@
 import { Calendar, Clock, MessageSquare, Tag, ThumbsUp } from "lucide-react";
 import Link from "next/link";
 import type { Video } from "../_lib/get-video";
-import { ChapterList } from "./chapter-list";
 import { TagsList } from "./tags-list";
 
 interface WatchDetailsProps {
@@ -127,18 +126,6 @@ export function WatchDetails({ video }: WatchDetailsProps) {
           />
         )}
       </div>
-
-      {video.chapters.length > 0 && (
-        <div className="mt-5">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h3 className="font-heading text-base text-foreground">Chapters</h3>
-            <span className="font-body text-xs text-muted-foreground/70">
-              {video.chapters.length} sections
-            </span>
-          </div>
-          <ChapterList chapters={video.chapters} />
-        </div>
-      )}
 
       {tags.length > 0 && (
         <div className="mt-5">
