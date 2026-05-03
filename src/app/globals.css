@@ -1332,10 +1332,18 @@ body:not(:has([data-canvas="muted"])) main + footer p {
   letter-spacing: -0.015em;
   text-align: center;
   margin: 0;
+  text-wrap: balance;
   /* Subtle group lift — drop-shadow on the wrapper so each word's
      stroke contour casts a soft shadow rather than a rectangular box. */
   filter: drop-shadow(0 6px 0 rgba(40, 18, 70, 0.12))
           drop-shadow(0 14px 28px rgba(60, 25, 100, 0.18));
+}
+
+/* iPad / tablet / small-laptop range — shrink so the headline stays on one line. */
+@media (min-width: 640px) and (max-width: 1279px) {
+  .home-balloon-heading {
+    font-size: clamp(2.25rem, 6vw, 4.5rem);
+  }
 }
 
 .balloon-word {

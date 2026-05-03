@@ -18,7 +18,7 @@ export default async function HomePage() {
       <div className="home-blob home-blob-4" />
       <div className="home-blob home-blob-5" />
 
-      <section className="relative z-10 px-6 pt-12 pb-6 text-center sm:pt-20 sm:pb-10">
+      <section className="relative z-10 px-6 pt-4 pb-6 text-center sm:pt-8 sm:pb-10">
         <h2 className="home-balloon-heading">
           <span className="balloon-word">Who</span>
           <span className="balloon-word">do</span>
