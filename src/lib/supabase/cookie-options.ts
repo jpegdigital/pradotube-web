@@ -12,3 +12,17 @@ export const cookieOptions = {
   sameSite: "lax" as const,
   secure: process.env.NODE_ENV === "production",
 };
+
+// Device-pairing cookie (`pt_device`) is intentionally NOT shared across
+// subdomains — it must be unreadable to the IAM at `auth.pof4.test`. We
+// omit `domain` so the browser binds the cookie to the exact host that set
+// it (the app origin). HttpOnly + 400-day max-age (the upper bound modern
+// browsers cap at) gives a long-lived credential that only the server can
+// read.
+export const deviceCookieOptions = {
+  path: "/",
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+  httpOnly: true,
+  maxAge: 34_560_000,
+};
