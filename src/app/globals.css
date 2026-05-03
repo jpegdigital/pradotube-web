@@ -1369,7 +1369,7 @@ body:not(:has([data-canvas="muted"])) main + footer p {
 /* iPad / tablet / small-laptop range — shrink so the headline stays on one line. */
 @media (min-width: 640px) and (max-width: 1279px) {
   .home-balloon-heading {
-    font-size: clamp(2.25rem, 6vw, 4.5rem);
+    font-size: clamp(2rem, 5.2vw, 4rem);
   }
 }
 
