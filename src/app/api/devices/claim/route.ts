@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid code" }, { status: 400 });
   }
 
-  const userAgent = request.headers.get("user-agent") ?? "";
+  const userAgent = (request.headers.get("user-agent") ?? "").slice(0, 256);
   const deviceLabel = (body.deviceLabel ?? "").trim().slice(0, 80);
 
   const { rawSecret, rawSecretBase64Url } = generateDeviceSecret();

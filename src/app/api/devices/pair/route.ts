@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       : { raw: String(lastError) };
   console.error("[devices/pair] insert failed", detail);
   return NextResponse.json(
-    { error: "could not create code", detail },
+    { error: "could not create code" },
     { status: 500 }
   );
 }
