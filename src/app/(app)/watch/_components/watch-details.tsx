@@ -1,5 +1,6 @@
 import { Calendar, Clock, MessageSquare, Tag, ThumbsUp } from "lucide-react";
 import Link from "next/link";
+import { avatarUrl } from "@/lib/avatars";
 import type { Video } from "../_lib/get-video";
 import { TagsList } from "./tags-list";
 
@@ -57,6 +58,7 @@ function StatPill({
 
 export function WatchDetails({ video }: WatchDetailsProps) {
   const creator = getCreator(video);
+  const creatorAvatar = creator ? avatarUrl(creator.avatar_path) : null;
   const tags = video.tags ?? [];
   const categories = video.categories ?? [];
   const duration = video.duration_seconds ?? 0;
@@ -71,9 +73,9 @@ export function WatchDetails({ video }: WatchDetailsProps) {
         {creator && (
           <div className="mt-4 flex items-center gap-3">
             <div className="relative h-10 w-10 overflow-hidden rounded-full ring-1 ring-primary/20">
-              {creator.thumbnail_url ? (
+              {creatorAvatar ? (
                 <img
-                  src={creator.thumbnail_url}
+                  src={creatorAvatar}
                   alt={creator.name}
                   loading="lazy"
                   className="absolute inset-0 h-full w-full object-cover"

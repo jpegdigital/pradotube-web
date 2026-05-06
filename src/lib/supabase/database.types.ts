@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       channels: {
         Row: {
+          avatar_path: string | null
           avg_duration_seconds: number | null
           avg_gap_days: number | null
           banner_url: string | null
@@ -31,7 +32,6 @@ export type Database = {
           fetched_at: string | null
           last_full_refresh_at: string | null
           max_duration_seconds: number
-          max_videos_override: number | null
           median_duration_seconds: number | null
           median_gap_days: number | null
           min_duration_override: number | null
@@ -59,6 +59,7 @@ export type Database = {
           youtube_id: string
         }
         Insert: {
+          avatar_path?: string | null
           avg_duration_seconds?: number | null
           avg_gap_days?: number | null
           banner_url?: string | null
@@ -74,7 +75,6 @@ export type Database = {
           fetched_at?: string | null
           last_full_refresh_at?: string | null
           max_duration_seconds?: number
-          max_videos_override?: number | null
           median_duration_seconds?: number | null
           median_gap_days?: number | null
           min_duration_override?: number | null
@@ -102,6 +102,7 @@ export type Database = {
           youtube_id: string
         }
         Update: {
+          avatar_path?: string | null
           avg_duration_seconds?: number | null
           avg_gap_days?: number | null
           banner_url?: string | null
@@ -117,7 +118,6 @@ export type Database = {
           fetched_at?: string | null
           last_full_refresh_at?: string | null
           max_duration_seconds?: number
-          max_videos_override?: number | null
           median_duration_seconds?: number | null
           median_gap_days?: number | null
           min_duration_override?: number | null
@@ -170,6 +170,7 @@ export type Database = {
       }
       creators: {
         Row: {
+          avatar_path: string | null
           created_at: string
           display_order: number
           id: string
@@ -180,6 +181,7 @@ export type Database = {
           thumbnail_url: string | null
         }
         Insert: {
+          avatar_path?: string | null
           created_at?: string
           display_order?: number
           id?: string
@@ -190,6 +192,7 @@ export type Database = {
           thumbnail_url?: string | null
         }
         Update: {
+          avatar_path?: string | null
           created_at?: string
           display_order?: number
           id?: string
@@ -350,7 +353,6 @@ export type Database = {
           score: number | null
           source_tags: string[]
           started_at: string | null
-          status: string | null
           storage_bytes: number | null
           subtitle_path: string | null
           sync_tier: string | null
@@ -393,7 +395,6 @@ export type Database = {
           score?: number | null
           source_tags?: string[]
           started_at?: string | null
-          status?: string | null
           storage_bytes?: number | null
           subtitle_path?: string | null
           sync_tier?: string | null
@@ -436,7 +437,6 @@ export type Database = {
           score?: number | null
           source_tags?: string[]
           started_at?: string | null
-          status?: string | null
           storage_bytes?: number | null
           subtitle_path?: string | null
           sync_tier?: string | null
@@ -519,7 +519,7 @@ export type Database = {
         Row: {
           channel_id: string | null
           channel_priority: number | null
-          creator_avatar: string | null
+          creator_avatar_path: string | null
           creator_channel_count: number | null
           creator_id: string | null
           creator_name: string | null
@@ -548,7 +548,7 @@ export type Database = {
         Row: {
           channel_id: string | null
           channel_priority: number | null
-          creator_avatar: string | null
+          creator_avatar_path: string | null
           creator_channel_count: number | null
           creator_id: string | null
           creator_name: string | null
@@ -586,6 +586,8 @@ export type Database = {
         Args: {
           p_channel_id: string
           p_max_attempts: number
+          p_max_duration: number
+          p_min_duration: number
           p_sort_key?: string
         }
         Returns: {
@@ -618,7 +620,6 @@ export type Database = {
           score: number | null
           source_tags: string[]
           started_at: string | null
-          status: string | null
           storage_bytes: number | null
           subtitle_path: string | null
           sync_tier: string | null

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { avatarUrl } from "@/lib/avatars";
 import { verifySession } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
@@ -39,7 +40,7 @@ export async function getUpNext(
   let query = supabase
     .from("user_feed_scored")
     .select(
-      "video_id, title, thumbnail_url, thumbnail_path, duration_seconds, creator_name, creator_slug, creator_avatar, feed_rank"
+      "video_id, title, thumbnail_url, thumbnail_path, duration_seconds, creator_name, creator_slug, creator_avatar_path, feed_rank"
     )
     .order("feed_rank", { ascending: true })
     .limit(limit + 1);
@@ -65,7 +66,7 @@ export async function getUpNext(
     durationSeconds: r.duration_seconds ?? 0,
     creatorName: r.creator_name!,
     creatorSlug: r.creator_slug!,
-    creatorAvatar: r.creator_avatar ?? "",
+    creatorAvatar: avatarUrl(r.creator_avatar_path) ?? "",
     feedRank: r.feed_rank!,
   }));
 

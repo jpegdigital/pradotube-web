@@ -1,5 +1,6 @@
 import "server-only";
 
+import { avatarUrl } from "@/lib/avatars";
 import { verifySession } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
@@ -15,7 +16,7 @@ export async function getWatchCreators(): Promise<WatchCreator[]> {
 
   const { data, error } = await supabase
     .from("user_subscriptions")
-    .select("creator:creators!inner(slug, name, thumbnail_url)")
+    .select("creator:creators!inner(slug, name, avatar_path)")
     .eq("user_id", userId);
 
   if (error) throw error;
@@ -24,7 +25,7 @@ export async function getWatchCreators(): Promise<WatchCreator[]> {
     .map((row) => ({
       slug: row.creator.slug,
       name: row.creator.name,
-      avatar: row.creator.thumbnail_url ?? "",
+      avatar: avatarUrl(row.creator.avatar_path) ?? "",
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

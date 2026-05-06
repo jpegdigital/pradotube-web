@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-query";
 import { Toaster, toast } from "sonner";
 import { useMountEffect } from "@/hooks/use-mount-effect";
+import { avatarUrl } from "@/lib/avatars";
 import { createClient } from "@/lib/supabase/browser";
 import { useCurrentUser } from "@/lib/auth/current-user-store";
 import {
@@ -42,7 +43,7 @@ import {
 interface ChannelOption {
   youtube_id: string;
   title: string;
-  thumbnail_url: string | null;
+  avatar_path: string | null;
   custom_url: string | null;
   sync_mode: string;
   pending_count: number;
@@ -145,7 +146,7 @@ async function fetchReviewChannels(): Promise<ChannelOption[]> {
   const [channelsResult, pendingResult] = await Promise.all([
     supabase
       .from("channels")
-      .select("youtube_id, title, thumbnail_url, custom_url, sync_mode")
+      .select("youtube_id, title, avatar_path, custom_url, sync_mode")
       .order("display_order", { ascending: true }),
     supabase
       .from("videos")
@@ -165,7 +166,7 @@ async function fetchReviewChannels(): Promise<ChannelOption[]> {
   const allChannels = (channelsResult.data ?? []).map((c) => ({
     youtube_id: c.youtube_id,
     title: c.title,
-    thumbnail_url: c.thumbnail_url,
+    avatar_path: c.avatar_path,
     custom_url: c.custom_url,
     sync_mode: c.sync_mode,
     pending_count: counts.get(c.youtube_id) ?? 0,
@@ -518,9 +519,9 @@ function ChannelTicker({
             title={`${c.title} — ${c.pending_count} pending`}
           >
             <span className="channel-chip-avatar">
-              {c.thumbnail_url ? (
+              {avatarUrl(c.avatar_path) ? (
                 <img
-                  src={c.thumbnail_url}
+                  src={avatarUrl(c.avatar_path)!}
                   alt={c.title}
                   loading="lazy"
                   className="absolute inset-0 h-full w-full object-cover"
@@ -560,9 +561,9 @@ function SelectedChannelHeader({ channel }: { channel: ChannelOption }) {
   return (
     <div className="selected-channel">
       <div className="selected-channel-avatar">
-        {channel.thumbnail_url ? (
+        {avatarUrl(channel.avatar_path) ? (
           <img
-            src={channel.thumbnail_url}
+            src={avatarUrl(channel.avatar_path)!}
             alt={channel.title}
             loading="lazy"
             className="absolute inset-0 h-full w-full object-cover"

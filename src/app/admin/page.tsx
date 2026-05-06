@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Toaster, toast } from "sonner";
+import { avatarUrl } from "@/lib/avatars";
 import { createClient } from "@/lib/supabase/browser";
 import { slugify } from "@/lib/slugify";
 import { StarRating } from "@/components/ui/star-rating";
@@ -40,6 +41,7 @@ import {
   CloudCog,
   ClipboardCheck,
   Smartphone,
+  Pencil,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -64,6 +66,7 @@ interface ChannelRow {
   description: string | null;
   custom_url: string | null;
   thumbnail_url: string | null;
+  avatar_path: string | null;
   banner_url: string | null;
   subscriber_count: number;
   video_count: number;
@@ -71,9 +74,8 @@ interface ChannelRow {
   creator_id: string | null;
   display_order: number | null;
   priority: number;
-  date_range_override: string | null;
+  date_range_override?: string | null;
   min_duration_override: number | null;
-  max_videos_override: number | null;
   sync_mode: string;
 }
 
@@ -81,7 +83,7 @@ interface Creator {
   id: string;
   name: string;
   slug: string;
-  thumbnail_url: string | null;
+  avatar_path: string | null;
   display_order: number;
   priority: number;
   channels: ChannelRow[];
@@ -215,8 +217,19 @@ export default function AdminPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newCreatorName, setNewCreatorName] = useState("");
   const [isCreatingCreator, setIsCreatingCreator] = useState(false);
-  const [editingAvatar, setEditingAvatar] = useState<string | null>(null);
   const createInputRef = useRef<HTMLInputElement>(null);
+
+  // Avatar upload — single hidden file input is reused for whichever
+  // creator/channel the admin clicked; the target tracks both kind + id so
+  // the same handler routes the upload to the right endpoint.
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarTarget, setAvatarTarget] = useState<
+    { kind: "creator" | "channel"; id: string } | null
+  >(null);
+  const [avatarUploading, setAvatarUploading] = useState<string | null>(null);
+  const [avatarVersions, setAvatarVersions] = useState<Map<string, number>>(
+    new Map()
+  );
 
 
   const { data: curatedChannels = [], isLoading: isHydrating } = useQuery({
@@ -349,6 +362,32 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["curated-channels"] });
       queryClient.invalidateQueries({ queryKey: ["creators"] });
       toast.success(`Added ${channel.title} to curated channels`);
+
+      // Re-host the YouTube avatar in R2 in the background. The channel insert
+      // succeeds even if this fails; admin can also click the creator avatar
+      // to upload manually.
+      if (channel.thumbnailUrl) {
+        void fetch("/api/avatars/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "channel",
+            id: channel.id,
+            sourceUrl: channel.thumbnailUrl,
+            alsoSetCreator: true,
+          }),
+        })
+          .then(async (res) => {
+            if (!res.ok) {
+              const { error } = await res.json().catch(() => ({}));
+              console.error("Avatar import failed:", error);
+              return;
+            }
+            queryClient.invalidateQueries({ queryKey: ["curated-channels"] });
+            queryClient.invalidateQueries({ queryKey: ["creators"] });
+          })
+          .catch((err) => console.error("Avatar import failed:", err));
+      }
     },
     [curatedChannels, queryClient]
   );
@@ -462,6 +501,24 @@ export default function AdminPage() {
           return;
         }
 
+        // If the creator has no avatar yet, inherit the channel's avatar_path.
+        // Same R2 object — no re-upload. The .is("avatar_path", null) guard
+        // ensures we never overwrite an existing creator avatar.
+        if (creatorId) {
+          const { data: ch } = await supabase
+            .from("channels")
+            .select("avatar_path")
+            .eq("youtube_id", channelId)
+            .maybeSingle();
+          if (ch?.avatar_path) {
+            await supabase
+              .from("creators")
+              .update({ avatar_path: ch.avatar_path })
+              .eq("id", creatorId)
+              .is("avatar_path", null);
+          }
+        }
+
         queryClient.invalidateQueries({ queryKey: ["creators"] });
         toast.success(
           creatorId
@@ -537,27 +594,6 @@ export default function AdminPage() {
     [queryClient]
   );
 
-  const updateMaxVideos = useCallback(
-    async (channelId: string, maxVideos: number | null) => {
-      try {
-        const supabase = createClient();
-        const { error } = await supabase
-          .from("channels")
-          .update({ max_videos_override: maxVideos })
-          .eq("youtube_id", channelId);
-        if (error) {
-          toast.error("Failed to update max videos");
-          return;
-        }
-        queryClient.invalidateQueries({ queryKey: ["creators"] });
-        toast.success(maxVideos ? `Max videos: ${maxVideos}` : "Max videos: default (10)");
-      } catch {
-        toast.error("Failed to update max videos");
-      }
-    },
-    [queryClient]
-  );
-
   const updateSyncMode = useCallback(
     async (channelId: string, syncMode: string) => {
       try {
@@ -606,6 +642,43 @@ export default function AdminPage() {
     [queryClient]
   );
 
+  const renameCreator = useCallback(
+    async (creatorId: string, nextName: string) => {
+      const trimmed = nextName.trim();
+      if (!trimmed) return false;
+
+      const supabase = createClient();
+      const slug = slugify(trimmed);
+      if (!slug) {
+        toast.error("Name must contain at least one letter or number");
+        return false;
+      }
+
+      const { error } = await supabase
+        .from("creators")
+        .update({
+          name: trimmed,
+          slug,
+          sort_name: trimmed.toLowerCase(),
+        })
+        .eq("id", creatorId);
+
+      if (error) {
+        toast.error(
+          error.code === "23505"
+            ? `A creator with the URL "/shows/${slug}" already exists`
+            : "Failed to rename group"
+        );
+        return false;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["creators"] });
+      toast.success(`Renamed to "${trimmed}"`);
+      return true;
+    },
+    [queryClient]
+  );
+
   const updateCreatorPriority = useCallback(
     async (creatorId: string, priority: number) => {
       try {
@@ -626,28 +699,60 @@ export default function AdminPage() {
     [queryClient]
   );
 
-  const updateCreatorAvatar = useCallback(
-    async (creatorId: string, thumbnailUrl: string | null) => {
-      try {
-        const supabase = createClient();
-        const { error } = await supabase
-          .from("creators")
-          .update({ thumbnail_url: thumbnailUrl })
-          .eq("id", creatorId);
+  const openAvatarPicker = useCallback(
+    (kind: "creator" | "channel", id: string) => {
+      setAvatarTarget({ kind, id });
+      avatarFileInputRef.current?.click();
+    },
+    []
+  );
 
-        if (error) {
-          toast.error("Failed to update avatar");
+  const handleAvatarFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const input = e.target;
+      const file = input.files?.[0];
+      const target = avatarTarget;
+      input.value = "";
+      setAvatarTarget(null);
+      if (!file || !target) return;
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please pick an image file");
+        return;
+      }
+
+      setAvatarUploading(target.id);
+      try {
+        const fd = new FormData();
+        fd.append("kind", target.kind);
+        fd.append("id", target.id);
+        fd.append("file", file);
+        const res = await fetch("/api/avatars/upload", {
+          method: "POST",
+          body: fd,
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          version?: number;
+          error?: string;
+        };
+        if (!res.ok) {
+          toast.error(json.error || "Avatar upload failed");
           return;
         }
-
+        setAvatarVersions((prev) => {
+          const next = new Map(prev);
+          next.set(target.id, json.version ?? Date.now());
+          return next;
+        });
         queryClient.invalidateQueries({ queryKey: ["creators"] });
-        setEditingAvatar(null);
+        queryClient.invalidateQueries({ queryKey: ["curated-channels"] });
         toast.success("Avatar updated");
       } catch {
-        toast.error("Failed to update avatar");
+        toast.error("Avatar upload failed");
+      } finally {
+        setAvatarUploading(null);
       }
     },
-    [queryClient]
+    [avatarTarget, queryClient]
   );
 
   const isCurated = (id: string) => curatedChannels.some((c) => c.id === id);
@@ -657,6 +762,15 @@ export default function AdminPage() {
   return (
     <div className="admin-root min-h-screen">
       <Toaster position="bottom-right" />
+      <input
+        ref={avatarFileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleAvatarFile}
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
+      />
       <div className="grain-overlay" />
 
       {/* Header — matches home page style */}
@@ -697,14 +811,14 @@ export default function AdminPage() {
               <ClipboardCheck className="h-4 w-4" />
             </Link>
             <Link
-              href="/admin/subscriptions"
+              href="/config/subscriptions"
               className="rounded-xl p-2 text-muted-foreground transition-all hover:bg-primary/10 hover:text-primary"
               title="Manage subscriptions"
             >
               <Users className="h-4 w-4" />
             </Link>
             <Link
-              href="/admin/devices"
+              href="/config/devices"
               className="rounded-xl p-2 text-muted-foreground transition-all hover:bg-primary/10 hover:text-primary"
               title="Manage paired iPads"
             >
@@ -827,7 +941,11 @@ export default function AdminPage() {
                 {/* Creator groups */}
                 {creators.map((creator, i) => {
                   // groups always expanded — no collapse
-                  const avatar = creator.thumbnail_url;
+                  const avatarSrc = avatarUrl(
+                    creator.avatar_path,
+                    avatarVersions.get(creator.id)
+                  );
+                  const isUploading = avatarUploading === creator.id;
                   const channelCount = creator.channels.length;
                   const groupR2 = creator.channels.reduce(
                     (s, ch) => s + (videoCounts.get(ch.youtube_id)?.uploaded ?? 0),
@@ -839,28 +957,33 @@ export default function AdminPage() {
                       {/* Group header */}
                       <div className="tt-group-header">
                         <button
-                          onClick={() => setEditingAvatar(editingAvatar === creator.id ? null : creator.id)}
+                          onClick={() => openAvatarPicker("creator", creator.id)}
                           className="tt-avatar"
-                          title="Change avatar"
+                          title="Click to upload new avatar"
+                          disabled={isUploading}
+                          aria-busy={isUploading}
                         >
-                          {avatar ? (
-                            <img src={avatar} alt={creator.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+                          {avatarSrc ? (
+                            <img src={avatarSrc} alt={creator.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
                           ) : (
                             <span className="flex h-full w-full items-center justify-center bg-secondary text-xs font-bold text-muted-foreground">
                               {creator.name.charAt(0)}
                             </span>
                           )}
                           <span className="tt-avatar-overlay">
-                            <ImageIcon className="h-3 w-3 text-white" />
+                            {isUploading ? (
+                              <Loader2 className="h-3 w-3 animate-spin text-white" />
+                            ) : (
+                              <ImageIcon className="h-3 w-3 text-white" />
+                            )}
                           </span>
                         </button>
-                        <div className="tt-group-info">
-                          <span className="tt-group-name">{creator.name}</span>
-                          <span className="tt-group-meta">
-                            {channelCount} channel{channelCount !== 1 && "s"}
-                            {groupR2 > 0 && <>&nbsp;&middot;&nbsp;{groupR2} synced</>}
-                          </span>
-                        </div>
+                        <CreatorGroupInfo
+                          creator={creator}
+                          channelCount={channelCount}
+                          groupR2={groupR2}
+                          onRename={renameCreator}
+                        />
                         <div className="tt-group-controls">
                           <StarRating
                             value={creator.priority}
@@ -876,32 +999,6 @@ export default function AdminPage() {
                           </button>
                         </div>
                       </div>
-
-                      {/* Avatar picker row */}
-                      {editingAvatar === creator.id && creator.channels.length > 0 && (
-                        <div className="tt-avatar-picker">
-                          <span className="font-body text-[11px] tracking-wider text-muted-foreground uppercase">
-                            Avatar:
-                          </span>
-                          {creator.channels.map((ch) => (
-                            <button
-                              key={ch.youtube_id}
-                              onClick={() => updateCreatorAvatar(creator.id, ch.thumbnail_url)}
-                              className="tt-avatar-option"
-                              title={ch.title}
-                            >
-                              {ch.thumbnail_url && (
-                                <img
-                                  src={ch.thumbnail_url}
-                                  alt={ch.title}
-                                  loading="lazy"
-                                  className="absolute inset-0 h-full w-full object-cover"
-                                />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      )}
 
                       {/* Channel child rows */}
                       <div className="tt-channels">
@@ -923,8 +1020,12 @@ export default function AdminPage() {
                                 onPriorityChange={updateChannelPriority}
                                 onDateRangeChange={updateDateRange}
                                 onMinDurationChange={updateMinDuration}
-                                onMaxVideosChange={updateMaxVideos}
                                 onSyncModeChange={updateSyncMode}
+                                onAvatarUploadClick={() =>
+                                  openAvatarPicker("channel", ch.youtube_id)
+                                }
+                                avatarVersion={avatarVersions.get(ch.youtube_id)}
+                                avatarUploading={avatarUploading === ch.youtube_id}
                               />
                             ))
                           )}
@@ -958,8 +1059,12 @@ export default function AdminPage() {
                           onPriorityChange={updateChannelPriority}
                           onDateRangeChange={updateDateRange}
                           onMinDurationChange={updateMinDuration}
-                          onMaxVideosChange={updateMaxVideos}
                           onSyncModeChange={updateSyncMode}
+                          onAvatarUploadClick={() =>
+                            openAvatarPicker("channel", ch.youtube_id)
+                          }
+                          avatarVersion={avatarVersions.get(ch.youtube_id)}
+                          avatarUploading={avatarUploading === ch.youtube_id}
                         />
                       ))}
                     </div>
@@ -1099,6 +1204,111 @@ export default function AdminPage() {
 }
 
 // ─── Sub-Components ──────────────────────────────────────────────────────────
+
+/** Group header info — name + meta with click-to-edit rename */
+function CreatorGroupInfo({
+  creator,
+  channelCount,
+  groupR2,
+  onRename,
+}: {
+  creator: Creator;
+  channelCount: number;
+  groupR2: number;
+  onRename: (creatorId: string, nextName: string) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(creator.name);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const beginEdit = () => {
+    setDraft(creator.name);
+    setEditing(true);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+  };
+
+  const cancel = () => {
+    setEditing(false);
+    setDraft(creator.name);
+  };
+
+  const commit = async () => {
+    if (saving) return;
+    const trimmed = draft.trim();
+    if (!trimmed || trimmed === creator.name) {
+      cancel();
+      return;
+    }
+    setSaving(true);
+    const ok = await onRename(creator.id, trimmed);
+    setSaving(false);
+    if (ok) setEditing(false);
+  };
+
+  if (editing) {
+    const nextSlug = slugify(draft.trim());
+    const slugChanged = nextSlug && nextSlug !== creator.slug;
+    return (
+      <div className="tt-group-info tt-group-edit">
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") cancel();
+          }}
+          onBlur={commit}
+          disabled={saving}
+          className="tt-group-name-input"
+          aria-label="Group name"
+        />
+        <span className="tt-group-meta">
+          {nextSlug ? (
+            <>
+              URL:&nbsp;
+              <code className="tt-slug-code">/shows/{nextSlug}</code>
+              {slugChanged && (
+                <span className="tt-slug-warn">
+                  &nbsp;&middot;&nbsp;old URL will 404
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="tt-slug-warn">
+              Name needs at least one letter or number
+            </span>
+          )}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="tt-group-info">
+      <span className="tt-group-name-row">
+        <span className="tt-group-name">{creator.name}</span>
+        <button
+          type="button"
+          onClick={beginEdit}
+          className="tt-group-edit-btn"
+          title="Rename group"
+          aria-label={`Rename ${creator.name}`}
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+      </span>
+      <span className="tt-group-meta">
+        {channelCount} channel{channelCount !== 1 && "s"}
+        {groupR2 > 0 && <>&nbsp;&middot;&nbsp;{groupR2} synced</>}
+      </span>
+    </div>
+  );
+}
 
 const DATE_RANGE_OPTIONS = [
   { value: "", label: "6mo" },
@@ -1281,45 +1491,6 @@ function MinDurationInput({
   );
 }
 
-/** Local-state input for max videos per channel */
-function MaxVideosInput({
-  channelId,
-  value,
-  onChange,
-}: {
-  channelId: string;
-  value: number | null | undefined;
-  onChange: (channelId: string, value: number | null) => void;
-}) {
-  const [local, setLocal] = useState(value != null ? String(value) : "");
-
-  const save = () => {
-    const trimmed = local.trim();
-    const next = trimmed === "" ? null : parseInt(trimmed, 10);
-    const prev = value ?? null;
-    if (next !== prev) {
-      onChange(channelId, Number.isNaN(next) || (next !== null && next < 1) ? null : next);
-    }
-  };
-
-  return (
-    <input
-      type="number"
-      min={1}
-      step={1}
-      placeholder="10"
-      value={local}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={save}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") e.currentTarget.blur();
-      }}
-      className="tt-meta-input [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-      title="Max videos — empty = default (10)"
-    />
-  );
-}
-
 /** Single channel row inside the tree table */
 function ChannelTreeRow({
   ch,
@@ -1330,8 +1501,10 @@ function ChannelTreeRow({
   onPriorityChange,
   onDateRangeChange,
   onMinDurationChange,
-  onMaxVideosChange,
   onSyncModeChange,
+  onAvatarUploadClick,
+  avatarVersion,
+  avatarUploading,
 }: {
   ch: ChannelRow;
   videoCounts: Map<string, VideoCounts>;
@@ -1341,21 +1514,44 @@ function ChannelTreeRow({
   onPriorityChange: (channelId: string, priority: number) => void;
   onDateRangeChange: (channelId: string, value: string | null) => void;
   onMinDurationChange: (channelId: string, value: number | null) => void;
-  onMaxVideosChange: (channelId: string, value: number | null) => void;
   onSyncModeChange: (channelId: string, value: string) => void;
+  onAvatarUploadClick: () => void;
+  avatarVersion?: number;
+  avatarUploading: boolean;
 }) {
   const view = rowToChannel(ch);
   const uploaded = videoCounts.get(ch.youtube_id)?.uploaded ?? 0;
   const totalVids = parseInt(view.videoCount, 10) || 0;
+  const thumb = avatarUrl(ch.avatar_path, avatarVersion) ?? view.thumbnailUrl;
 
   // Normalize legacy "19700101" (epoch) to "all" for pill matching
   const rangeValue = ch.date_range_override === "19700101" ? "all" : (ch.date_range_override ?? "");
 
   return (
     <div className="tt-channel">
-      <div className="tt-ch-thumb">
-        <img src={view.thumbnailUrl} alt={view.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
-      </div>
+      <button
+        type="button"
+        onClick={onAvatarUploadClick}
+        className="tt-ch-thumb"
+        title="Click to upload new avatar"
+        disabled={avatarUploading}
+        aria-busy={avatarUploading}
+      >
+        {thumb ? (
+          <img src={thumb} alt={view.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center bg-secondary text-xs font-bold text-muted-foreground">
+            {view.title.charAt(0)}
+          </span>
+        )}
+        <span className="tt-ch-thumb-overlay">
+          {avatarUploading ? (
+            <Loader2 className="h-3 w-3 animate-spin text-white" />
+          ) : (
+            <ImageIcon className="h-3 w-3 text-white" />
+          )}
+        </span>
+      </button>
       <div className="tt-ch-body">
         <div className="tt-ch-top">
           <span className="tt-ch-title">{view.title}</span>
@@ -1405,8 +1601,6 @@ function ChannelTreeRow({
           </div>
           <span className="tt-dot">&middot;</span>
           <MinDurationInput key={`min-${ch.youtube_id}-${ch.min_duration_override ?? "null"}`} channelId={ch.youtube_id} value={ch.min_duration_override} onChange={onMinDurationChange} />
-          <span className="tt-dot">&middot;</span>
-          <MaxVideosInput key={`max-${ch.youtube_id}-${ch.max_videos_override ?? "null"}`} channelId={ch.youtube_id} value={ch.max_videos_override} onChange={onMaxVideosChange} />
           <span className="tt-dot">&middot;</span>
           <SyncModePills
             channelId={ch.youtube_id}

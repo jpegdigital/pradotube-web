@@ -8,6 +8,7 @@ export interface ChannelRow {
 	description: string | null;
 	custom_url: string | null;
 	thumbnail_url: string | null;
+	avatar_path: string | null;
 	banner_url: string | null;
 	subscriber_count: number;
 	video_count: number;
@@ -15,9 +16,7 @@ export interface ChannelRow {
 	creator_id: string | null;
 	display_order: number | null;
 	priority: number;
-	date_range_override: string | null;
 	min_duration_override: number | null;
-	max_videos_override: number | null;
 	sync_mode: string;
 }
 
@@ -25,7 +24,7 @@ export interface Creator {
 	id: string;
 	name: string;
 	slug: string;
-	thumbnail_url: string | null;
+	avatar_path: string | null;
 	display_order: number;
 	priority: number;
 	channels: ChannelRow[];
@@ -37,9 +36,9 @@ export interface CreatorsWithChannelsResponse {
 }
 
 const CHANNEL_FIELDS =
-	"youtube_id, title, description, custom_url, thumbnail_url, banner_url, " +
+	"youtube_id, title, description, custom_url, thumbnail_url, avatar_path, banner_url, " +
 	"subscriber_count, video_count, view_count, creator_id, display_order, " +
-	"priority, date_range_override, min_duration_override, max_videos_override, sync_mode";
+	"priority, min_duration_override, sync_mode";
 
 /* ─── Full nested query (admin panel) ─── */
 
@@ -48,7 +47,7 @@ export async function fetchCreatorsWithChannels(): Promise<CreatorsWithChannelsR
 	const [creatorsResult, channelsResult] = await Promise.all([
 		supabase
 			.from("creators")
-			.select("id, name, slug, thumbnail_url, display_order, priority")
+			.select("id, name, slug, avatar_path, display_order, priority")
 			.order("sort_name", { ascending: true }),
 		supabase
 			.from("channels")

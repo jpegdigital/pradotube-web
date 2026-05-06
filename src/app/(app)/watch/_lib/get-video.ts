@@ -19,7 +19,7 @@ function videoQuery(supabase: SupabaseClient, id: string) {
        language, webpage_url, handle,
        channels(
          title,
-         creators(id, name, slug, thumbnail_url)
+         creators(id, name, slug, avatar_path)
        )`
     )
     .eq("youtube_id", id)

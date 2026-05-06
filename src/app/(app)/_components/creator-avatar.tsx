@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { avatarUrl } from "@/lib/avatars";
 import type { Row } from "@/lib/supabase/types";
 
 const ACCENT_RINGS = [
@@ -20,6 +21,7 @@ export function CreatorAvatar({
 }) {
   const accent = ACCENT_RINGS[index % ACCENT_RINGS.length];
   const eager = index < 8;
+  const src = avatarUrl(creator.avatar_path);
 
   return (
     <div
@@ -39,9 +41,9 @@ export function CreatorAvatar({
 
       <div className="home-avatar-ring relative size-[100px] sm:size-[120px] lg:size-[140px]">
         <div className="home-avatar-inner">
-          {creator.thumbnail_url ? (
+          {src ? (
             <img
-              src={creator.thumbnail_url}
+              src={src}
               alt={creator.name}
               loading={eager ? "eager" : "lazy"}
               fetchPriority={eager ? "high" : "auto"}

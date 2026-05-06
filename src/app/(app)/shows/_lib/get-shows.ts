@@ -1,5 +1,6 @@
 import "server-only";
 
+import { avatarUrl } from "@/lib/avatars";
 import { verifySession } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -58,7 +59,7 @@ export async function getShowsPage(
   let query = supabase
     .from("user_feed_scored")
     .select(
-      "video_id, title, thumbnail_url, thumbnail_path, duration_seconds, published_at, view_count, creator_name, creator_avatar"
+      "video_id, title, thumbnail_url, thumbnail_path, duration_seconds, published_at, view_count, creator_name, creator_avatar_path"
     )
     .order(sort, { ascending: dir === "asc", nullsFirst: false })
     .order("video_id", { ascending: true })
@@ -92,7 +93,7 @@ export async function getShowsPage(
     publishedAt: r.published_at,
     viewCount: r.view_count != null ? Number(r.view_count) : null,
     creatorName: r.creator_name!,
-    creatorAvatar: r.creator_avatar ?? "",
+    creatorAvatar: avatarUrl(r.creator_avatar_path) ?? "",
   }));
 
   return {
@@ -109,7 +110,7 @@ export async function getShowsInitial(slug?: string): Promise<ShowsInitial> {
     getShowsPage({ slug }),
     supabase
       .from("user_subscriptions")
-      .select("creator:creators!inner(slug, name, thumbnail_url)")
+      .select("creator:creators!inner(slug, name, avatar_path)")
       .eq("user_id", userId),
   ]);
 
@@ -119,7 +120,7 @@ export async function getShowsInitial(slug?: string): Promise<ShowsInitial> {
     .map((row) => ({
       slug: row.creator.slug,
       name: row.creator.name,
-      avatar: row.creator.thumbnail_url ?? "",
+      avatar: avatarUrl(row.creator.avatar_path) ?? "",
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
