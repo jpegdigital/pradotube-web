@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { verifySession } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
-const VIDEO_ID_RE = /^[\w-]{10,12}$/;
+const VIDEO_ID_RE = /^[\w-]{10,64}$/;
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
