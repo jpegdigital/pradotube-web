@@ -10,13 +10,17 @@ export default async function WatchPage({
   const { id } = await params;
   const video = await getVideo(id);
 
+  const thumbnail = video.thumbnail_path
+    ? `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${video.thumbnail_path}`
+    : (video.thumbnail_url ?? "");
+
   return (
     <>
       <div className="relative mt-3 aspect-video max-h-[75vh] overflow-hidden rounded-2xl shadow-xl">
         <PlayerIsland
           key={id}
           mediaPath={video.media_path}
-          thumbnail={video.thumbnail_url ?? ""}
+          thumbnail={thumbnail}
           title={video.title ?? ""}
         />
       </div>
