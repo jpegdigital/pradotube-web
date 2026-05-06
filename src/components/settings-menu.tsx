@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useTheme } from "next-themes";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
-import { LogOut, Moon, Sun, SunMoon, Users, Wrench } from "lucide-react";
+import { LogOut, Moon, Sun, SunMoon, Wrench } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
 import { useCurrentUserSnapshot } from "@/lib/auth/current-user-store";
 import { useMountEffect } from "@/hooks/use-mount-effect";
@@ -148,7 +148,7 @@ export function SettingsMenu() {
                     nativeButton={false}
                     render={
                       <Link
-                        href="/admin"
+                        href="/config"
                         className="settings-row flex items-center gap-3 rounded-xl px-3 py-2.5 font-body text-sm font-medium text-foreground transition-colors hover:bg-foreground/[0.04]"
                       />
                     }
@@ -158,27 +158,13 @@ export function SettingsMenu() {
                     </span>
                     Admin panel
                   </PopoverPrimitive.Close>
-                  <PopoverPrimitive.Close
-                    nativeButton={false}
-                    render={
-                      <Link
-                        href="/admin/subscriptions"
-                        className="settings-row flex items-center gap-3 rounded-xl px-3 py-2.5 font-body text-sm font-medium text-foreground transition-colors hover:bg-foreground/[0.04]"
-                      />
-                    }
-                  >
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Users className="h-3.5 w-3.5" />
-                    </span>
-                    Subscriptions
-                  </PopoverPrimitive.Close>
                 </div>
               </>
             )}
 
             {/* Sign out is admin-only. Kids are paired to a dedicated device
-                via /admin/devices — clearing their session locally would just
-                bounce them through /api/session/refresh and back into a
+                via /config/devices — clearing their session locally would
+                just bounce them through /api/session/refresh and back into a
                 session, since pt_device is still on the device. The parent
                 signs them out by revoking the device. */}
             {currentUser.isAdmin && (

@@ -51,7 +51,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/setup", baseUrl));
   }
 
-  if (path.startsWith("/admin") && !hasAdminGroup(claims as JwtClaims)) {
+  if (
+    (path.startsWith("/admin") || path.startsWith("/config")) &&
+    !hasAdminGroup(claims as JwtClaims)
+  ) {
     return NextResponse.redirect(new URL("/403", baseUrl));
   }
 
