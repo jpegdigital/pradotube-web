@@ -16,6 +16,8 @@ import {
 } from "@vidstack/react/player/layouts/default";
 import Hls from "hls.js";
 
+import { TapToToggle } from "./tap-to-toggle";
+
 interface LocalPlayerProps {
   mediaPath: string;
   thumbnail: string;
@@ -47,7 +49,8 @@ export function LocalPlayer({ mediaPath, thumbnail, title }: LocalPlayerProps) {
           <Poster src={thumbnail} alt={title} className="vds-poster" />
         ) : null}
       </MediaProvider>
-      <DefaultVideoLayout icons={defaultLayoutIcons} />
+      <DefaultVideoLayout icons={defaultLayoutIcons} noGestures />
+      <TapToToggle />
     </MediaPlayer>
   );
 }
